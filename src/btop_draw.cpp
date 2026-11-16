@@ -2006,48 +2006,101 @@ namespace Proc {
 			    if (selected > 0) Input::mouse_mappings["F"] = {y + height - 1, mouse_x, 1, 6};
 			}
 
-			//? Labels for fields in list, clicking a label sorts by it (key "sort_<sorting>", see Input::process)
+			//? Column labels, drawn as a bar of header cells. Clicking a cell sorts by it (key "sort_<sorting>", see Input::process).
+			//? The sorted cell is tinted and shows the direction: down arrow = biggest or Z first, up arrow = smallest or A first.
 			for (const auto& key : {"sort_pid", "sort_name", "sort_command", "sort_threads", "sort_user", "sort_network", "sort_gpu", "sort_memory", "sort_cpu"})
 				Input::mouse_mappings.erase(key);
+			struct HeaderCell { string key; int x, w; string label; bool right; };
+			vector<HeaderCell> cells;
 			const int hy = y + 1;
 			int hx = x + 1;
-			out += Mv::to(hy, hx) + Theme::c("title") + Fx::b;
+			//? "Threads" is drawn 4 columns to the left, over the end of the command or tree field
+			const int overlap = (thread_size > 0 ? 4 : 0);
 			if (not proc_tree) {
-				out += rjust("Pid:", 8) + ' ' + ljust("Program:", prog_size) + ' ' + (cmd_size > 0 ? ljust("Command:", cmd_size) : "") + ' ';
-				Input::mouse_mappings["sort_pid"] = {hy, hx, 1, 8};
-				Input::mouse_mappings["sort_name"] = {hy, hx + 9, 1, prog_size};
-				//? "Threads:" is drawn 4 columns to the left, over the end of the command field
-				const int cmd_click = cmd_size - (thread_size > 0 ? 3 : 0);
-				if (cmd_click > 0) Input::mouse_mappings["sort_command"] = {hy, hx + 10 + prog_size, 1, cmd_click};
+				cells.push_back({"sort_pid", hx, 8, "Pid", true});
+				cells.push_back({"sort_name", hx + 9, prog_size, "Program", false});
+				if (cmd_size - overlap > 0) cells.push_back({"sort_command", hx + 10 + prog_size, cmd_size - overlap, "Command", false});
 				hx += 11 + prog_size + max(0, cmd_size);
 			}
 			else {
-				out += ljust("Tree:", tree_size) + ' ';
+				cells.push_back({"", hx, tree_size - overlap, "Tree", false});
 				hx += tree_size + 1;
 			}
 			if (thread_size > 0) {
-				out += Mv::l(4) + "Threads: ";
-				Input::mouse_mappings["sort_threads"] = {hy, hx - 4, 1, 8};
+				cells.push_back({"sort_threads", hx - 4, 8, "Threads", false});
 				hx += 5;
 			}
-			out += ljust("User:", user_size) + ' ';
-			Input::mouse_mappings["sort_user"] = {hy, hx, 1, user_size};
+			cells.push_back({"sort_user", hx, user_size, "User", false});
 			hx += user_size + 1;
-			if (net_cols > 0) {
-				out += (net_cols == 2 ? rjust("Down", 5) + ' ' + rjust("Up", 5) + ' ' : rjust("Net", 5) + ' ');
-				Input::mouse_mappings["sort_network"] = {hy, hx, 1, net_cols * 6 - 1};
-				hx += net_cols * 6;
+			if (net_cols == 2) {
+				cells.push_back({"sort_network", hx, 5, "Down", true});
+				cells.push_back({"sort_network", hx + 6, 5, "Up", true});
 			}
+			else if (net_cols == 1)
+				cells.push_back({"sort_network", hx, 5, "Net", true});
+			hx += net_cols * 6;
 			if (gpu_cols > 0) {
-				out += rjust("Gpu%", 5) + ' ';
-				Input::mouse_mappings["sort_gpu"] = {hy, hx, 1, 5};
+				cells.push_back({"sort_gpu", hx, 5, "Gpu%", true});
 				hx += 6;
 			}
-			out += rjust((mem_bytes ? "MemB" : "Mem%"), 5) + ' ';
-			Input::mouse_mappings["sort_memory"] = {hy, hx, 1, 5};
+			cells.push_back({"sort_memory", hx, 5, (mem_bytes ? "MemB" : "Mem%"), true});
 			hx += 6;
-			out += rjust("Cpu%", (show_graphs ? 10 : 5)) + Fx::ub;
-			Input::mouse_mappings["sort_cpu"] = {hy, hx, 1, (show_graphs ? 10 : 5)};
+			cells.push_back({"sort_cpu", hx, (show_graphs ? 10 : 5), "Cpu%", true});
+			const int bar_w = cells.back().x + cells.back().w - (x + 1);
+
+			const string sorted_key = "sort_"s + (sorting.starts_with("cpu") ? "cpu"s : sorting);
+			const bool ascending = is_in(sorting, "name", "command", "user") != Config::getB("proc_reversed");
+			const string arrow = (tty_mode ? (ascending ? "^" : "v") : (ascending ? "▲" : "▼"));
+
+			//? Bar colors come from the theme: the bar is the background 70% of the way to inactive_fg,
+			//? the sorted cell is the bar 25% of the way to hi_fg, dividers are the bar 20% of the way to main_fg.
+			//? The TTY theme has no rgb values and tty mode is for basic consoles, so both get plain labels.
+			string bar_bg, sort_bg, div_fg;
+			const bool bar = not tty_mode and rng::all_of(std::array{"main_fg", "inactive_fg", "hi_fg"}, [](const char* name) {
+				return Theme::rgbs.contains(name) and Theme::rgbs.at(name)[0] >= 0;
+			});
+			if (bar) {
+				const auto blend = [](const std::array<int, 3>& a, const std::array<int, 3>& b, double f) {
+					return std::array{(int)std::lround(a[0] + (b[0] - a[0]) * f), (int)std::lround(a[1] + (b[1] - a[1]) * f), (int)std::lround(a[2] + (b[2] - a[2]) * f)};
+				};
+				const auto color = [](const std::array<int, 3>& c, const string& depth) {
+					return Theme::dec_to_color(c[0], c[1], c[2], Config::getB("lowcolor"), depth);
+				};
+				const auto fg = Theme::dec("main_fg");
+				//? A transparent background has no rgb value, so guess it from the text color: light text means a dark background
+				const bool has_bg = Theme::rgbs.contains("main_bg") and Theme::rgbs.at("main_bg")[0] >= 0;
+				const std::array<int, 3> base = has_bg ? Theme::dec("main_bg")
+					: (fg[0] + fg[1] + fg[2] > 384 ? std::array{0, 0, 0} : std::array{255, 255, 255});
+				const auto bar_rgb = blend(base, Theme::dec("inactive_fg"), 0.7);
+				bar_bg = color(bar_rgb, "bg");
+				sort_bg = color(blend(bar_rgb, Theme::dec("hi_fg"), 0.25), "bg");
+				div_fg = color(blend(bar_rgb, fg, 0.2), "fg");
+			}
+
+			out += Mv::to(hy, x + 1) + (bar ? bar_bg : Theme::c("main_bg")) + string(max(0, bar_w), ' ') + Fx::b;
+			for (size_t i = 0; i < cells.size(); i++) {
+				const auto& c = cells[i];
+				const bool sorted = not c.key.empty() and c.key == sorted_key;
+				const int text_w = max(0, c.w - (sorted ? 1 : 0));
+				const string text = (ulen(c.label) > (size_t)text_w ? uresize(c.label, text_w) : c.label);
+				const string pad(max(0, text_w - (int)ulen(text)), ' ');
+				const string label = Theme::c(sorted ? "hi_fg" : "title") + text;
+				const string mark = (sorted ? Theme::c("hi_fg") + arrow : "");
+				out += Mv::to(hy, c.x) + (bar ? (sorted ? sort_bg : bar_bg) : "")
+					+ (c.right ? pad + mark + label : label + mark + pad);
+				//? Divider in the gap before the next cell, tinted too when both cells are the sorted one (Down and Up)
+				if (bar and i + 1 < cells.size() and c.x + c.w < cells[i + 1].x)
+					out += Mv::to(hy, c.x + c.w) + (sorted and cells[i + 1].key == c.key ? sort_bg : bar_bg) + Fx::ub + div_fg + Symbols::v_line + Fx::b;
+				if (c.key.empty()) continue;
+				//? Down and Up are two cells for one sort, so they share one click area
+				if (Input::mouse_mappings.contains(c.key)) {
+					auto& loc = Input::mouse_mappings.at(c.key);
+					loc.width = c.x + c.w - loc.col;
+				}
+				else
+					Input::mouse_mappings[c.key] = {hy, c.x, 1, c.w};
+			}
+			out += Fx::ub + Theme::c("main_bg");
 		}
 		//* End of redraw block
 

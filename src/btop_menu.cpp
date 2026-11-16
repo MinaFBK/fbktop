@@ -174,6 +174,7 @@ namespace Menu {
 	const vector<array<string, 2>> help_text = {
 		{"Mouse 1", "Clicks buttons and selects in process list."},
 		{"Mouse scroll", "Scrolls any scrollable list/text under cursor."},
+		{"Click header", "Sort by that column, click again to reverse."},
 		{"Esc, m", "Toggles main menu."},
 		{"p", "Cycle view presets forwards."},
 		{"shift + p", "Cycle view presets backwards."},

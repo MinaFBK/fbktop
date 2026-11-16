@@ -9,7 +9,8 @@
 - **Down / Up columns** in the process list (one combined **Net** column when the box is narrower than 90 columns). Idle programs show a dimmed `0`.
 - **Gpu% column**: how busy each program keeps the GPU, as the busiest GPU engine (3D, compute, video) since the last update, like the GPU column in Windows Task Manager. Shown when the box is at least 70 columns wide.
 - **`network` and `gpu` sort options**: cycle with `←` / `→`.
-- **Clickable column headers**: click a column name (Pid, Program, Command, Threads, User, Down/Up, Gpu%, Mem, Cpu%) to sort by it; click it again to reverse.
+- **Clickable column headers**: the header row is drawn as a bar of buttons. Click a column name (Pid, Program, Command, Threads, User, Down/Up, Gpu%, Mem, Cpu%) to sort by it; click it again to reverse. The sorted column is tinted and shows `▼` (biggest or Z first) or `▲` (smallest or A first). Bar colors are mixed from the theme; tty mode shows plain labels with `v` / `^`.
+- **Case-insensitive text sorts**: Program, Command and User sort as `alacritty`, `Bash`, `cron` instead of capitals first.
 - **Startup sort stays put**: the sort and reverse set in the config file or options menu are what fbktop starts with. Changing them with the keys or the mouse only lasts until you quit.
 - **Info box line** (select a process, press `Enter`): download and upload rate plus totals since fbktop started.
 - **`proc_net` and `proc_gpu` options** in the options menu (both on by default).

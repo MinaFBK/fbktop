@@ -17,6 +17,7 @@ tab-size = 4
 */
 
 #include <sys/resource.h>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <ranges>
@@ -103,14 +104,20 @@ bool set_priority(pid_t pid, int priority) {
 
 	static uint64_t net_total(const proc_info& p) { return p.net_rx + p.net_tx; }
 
+	//* Case-insensitive text order, so "cron" sorts between "Bash" and "Docker" instead of after every capitalized name
+	static bool less_ic(const string& a, const string& b) {
+		return rng::lexicographical_compare(a, b, [](unsigned char l, unsigned char r) { return std::tolower(l) < std::tolower(r); });
+	}
+	static bool greater_ic(const string& a, const string& b) { return less_ic(b, a); }
+
 	void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, bool reverse, bool tree) {
 		if (reverse) {
 			switch (v_index(sort_vector, sorting)) {
 			case 0: rng::stable_sort(proc_vec, rng::less{}, &proc_info::pid); 		break;
-			case 1: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::name);		break;
-			case 2: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::cmd); 		break;
+			case 1: rng::stable_sort(proc_vec, greater_ic, &proc_info::name);		break;
+			case 2: rng::stable_sort(proc_vec, greater_ic, &proc_info::cmd); 		break;
 			case 3: rng::stable_sort(proc_vec, rng::less{}, &proc_info::threads);	break;
-			case 4: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::user); 		break;
+			case 4: rng::stable_sort(proc_vec, greater_ic, &proc_info::user); 		break;
 			case 5: rng::stable_sort(proc_vec, rng::less{}, &proc_info::mem); 		break;
 			case 6: rng::stable_sort(proc_vec, rng::less{}, &proc_info::cpu_p);		break;
 			case 7: rng::stable_sort(proc_vec, rng::less{}, &proc_info::cpu_c);		break;
@@ -121,10 +128,10 @@ bool set_priority(pid_t pid, int priority) {
 		else {
 			switch (v_index(sort_vector, sorting)) {
 			case 0: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::pid); 		break;
-			case 1: rng::stable_sort(proc_vec, rng::less{}, &proc_info::name);		break;
-			case 2: rng::stable_sort(proc_vec, rng::less{}, &proc_info::cmd); 		break;
+			case 1: rng::stable_sort(proc_vec, less_ic, &proc_info::name);		break;
+			case 2: rng::stable_sort(proc_vec, less_ic, &proc_info::cmd); 		break;
 			case 3: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::threads);	break;
-			case 4: rng::stable_sort(proc_vec, rng::less{}, &proc_info::user);		break;
+			case 4: rng::stable_sort(proc_vec, less_ic, &proc_info::user);		break;
 			case 5: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::mem); 		break;
 			case 6: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::cpu_p);   	break;
 			case 7: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::cpu_c);   	break;
