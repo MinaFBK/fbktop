@@ -4,9 +4,13 @@ Facts for working on fbktop that the README doesn't cover.
 
 ## Repo
 
-- `origin` = `MinaFBK/fbktop` (private), branch `main`. `upstream` = aristocratos/btop with push
-  disabled. GitHub forks can't be private, so this is a standalone repo that carries upstream's
-  history; merge upstream fixes from `upstream`.
+- `origin` = `MinaFBK/fbktop` (public since 2026-11-16), branch `main`. `upstream` = aristocratos/btop
+  with push disabled. It started private, and GitHub forks can't be private, so this is a standalone
+  repo that carries upstream's history; merge upstream fixes from `upstream`.
+- Before going public the history was rewritten (no-reply commit email, personal notes and paths
+  removed) and the GitHub repo was deleted and recreated, because GitHub keeps old commits and lists
+  them in the Activity log after a force-push. Commit with the no-reply address: this clone has
+  `user.email = 80572966+MinaFBK@users.noreply.github.com` in its local git config.
 - Renamed from the btop patch on 2026-11-16. Only user-facing names changed (command, config, log,
   banner, icon); internals stay `btop_*` so upstream merges stay clean.
 
