@@ -7,7 +7,7 @@ labels: bug
 
 **Read the README.md and search for similar issues before posting a bug report!**
 
-<!-- Any bug that can be solved by just reading the [prerequisites](https://github.com/aristocratos/btop#prerequisites) section of the README will likely be ignored. -->
+<!-- Bugs in parts fbktop didn't change (CPU, memory, disk and network boxes) are likely btop bugs too: check https://github.com/aristocratos/btop/issues first. -->
 
 **Describe the bug**
 
@@ -15,7 +15,7 @@ labels: bug
 
 **To Reproduce**
 
-<!-- Steps to reproduce the behavior. ->
+<!-- Steps to reproduce the behavior. -->
 
 **Expected behavior**
 
@@ -26,34 +26,29 @@ labels: bug
 <!-- If applicable, add screenshots to help explain your problem. -->
 
 **Info (please complete the following information):**
- - btop++ version: `btop --version`
-   - If using snap: `snap info btop`
- - Binary: [self compiled or static binary from release]
+ - fbktop version: `fbktop --version`
+ - Capabilities: `getcap $(which fbktop)`
  - Architecture: [x86_64, aarch64, etc.] `uname -m`
- - Platform: [Linux, FreeBSD, OsX]
- - (Linux) Kernel: `uname -r`
- - (OSX/FreeBSD) Os release version:
+ - Kernel: `uname -r`
+ - Distribution and libbpf version:
+ - GPU and driver (for the Gpu% column):
  - Terminal used:
  - Font used:
 
 **Additional context**
 
-<!-- Contents of `~/.local/state/btop.log` -->
-
-<!-- Note: The snap uses: `~/snap/btop/current/.local/state/btop.log` -->
-
-<!-- (try running btop with `--debug` flag if btop.log is empty) -->
+<!-- Contents of `~/.local/state/fbktop.log` (set log_level = "DEBUG" in ~/.config/fbktop/fbktop.conf or run `fbktop --debug` if it is empty) -->
 
 **GDB Backtrace**
 
-<!-- If btop++ is crashing at start the following steps could be helpful: -->
+<!-- If fbktop is crashing the following steps could be helpful: -->
 
-<!-- (Extra helpful if compiled with `make OPTFLAGS="-O0 -g"`) -->
+<!-- (Extra helpful if compiled with `make DEBUG=true`) -->
 
-<!-- 1. run (linux): `gdb btop` (macos): `lldb btop` -->
+<!-- 1. run `gdb fbktop` -->
 
 <!-- 2. `r` to run, wait for crash and press enter if prompted, CTRL+L to clear screen if needed. -->
 
-<!-- 3. (gdb): `thread apply all bt` (lldb): `bt all` to get backtrace for all threads -->
+<!-- 3. `thread apply all bt` to get a backtrace for all threads -->
 
 <!-- 4. Copy and paste the backtrace here: -->
