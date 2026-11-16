@@ -345,7 +345,7 @@ namespace Tools {
 		if (auto it = map.find(key); it != map.end()) {
 			return it->second;
 		} else {
-			Logger::error("safeVal() called with invalid key: [{}] (Compile btop with DEBUG=true for more extensive logging!)", key);
+			Logger::error("safeVal() called with invalid key: [{}] (Compile fbktop with DEBUG=true for more extensive logging!)", key);
 			return fallback;
 		}
 	};
@@ -366,7 +366,7 @@ namespace Tools {
 		if (index < vec.size()) {
 			return vec[index];
 		} else {
-			Logger::error("safeVal() called with invalid index: [{}] (Compile btop with DEBUG=true for more extensive logging!)", index);
+			Logger::error("safeVal() called with invalid index: [{}] (Compile fbktop with DEBUG=true for more extensive logging!)", index);
 			return fallback;
 		}
 	};

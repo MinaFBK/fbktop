@@ -169,7 +169,7 @@ namespace Draw {
 				}
 				if (++z < Global::Banner_src.size()) banner += Mv::l(ulen(line[1])) + Mv::d(1);
 			}
-			banner += Mv::r(18 - Global::Version.size())
+			banner += Mv::r(2)
 					+ Theme::c("main_fg") + Fx::b + Fx::i + "v" + Global::Version + Fx::reset;
 		}
 		if (redraw) return "";

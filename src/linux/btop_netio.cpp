@@ -122,7 +122,7 @@ namespace Proc::NetIO {
 
 		if (const int err = bpf_object__load(obj); err != 0) {
 			if (err == -EPERM or err == -EACCES)
-				return fail("missing privileges, run btop as root or give it CAP_BPF and CAP_PERFMON (make setcap)");
+				return fail("missing privileges, run fbktop as root or give it CAP_BPF and CAP_PERFMON (make setcap)");
 			return fail(fmt::format("could not load eBPF program ({}), needs Linux 6.3+ with BTF", strerror(-err)));
 		}
 

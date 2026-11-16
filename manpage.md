@@ -1,20 +1,20 @@
-% btop(1) | User Commands
+% fbktop(1) | User Commands
 %
 % 2025-05-01
 
 # NAME
 
-btop - Resource monitor that shows usage and stats for processor, memory, disks, network, and processes.
+fbktop - Resource monitor that shows usage and stats for processor, memory, disks, network, and processes, including network usage per process. Based on btop.
 
 # SYNOPSIS
 
-**btop** [**-c** _file_] [**-d**] [**-f** _filter_] [**-l**] [**-p** _id_] [**-t**] [**-u** _ms_] [**\-\-force-utf**] [**\-\-themes-dir** _dir_]
+**fbktop** [**-c** _file_] [**-d**] [**-f** _filter_] [**-l**] [**-p** _id_] [**-t**] [**-u** _ms_] [**\-\-force-utf**] [**\-\-themes-dir** _dir_]
 
-**btop** [**\-\-default-config** | {**-h** | **\-\-help**} | {**-V** | **\-\-version**}]
+**fbktop** [**\-\-default-config** | {**-h** | **\-\-help**} | {**-V** | **\-\-version**}]
 
 # DESCRIPTION
 
-**btop** is a program that shows usage and stats for processor, memory, disks, network, and processes.
+**fbktop** is a program that shows usage and stats for processor, memory, disks, network, and processes.
 
 # OPTIONS
 
@@ -70,4 +70,4 @@ The upstream bug tracker can be found at https://github.com/aristocratos/btop/is
 
 # AUTHOR
 
-**btop** was written by Jakob P. Liljenberg a.k.a. "Aristocratos".
+**fbktop** was written by Jakob P. Liljenberg a.k.a. "Aristocratos".

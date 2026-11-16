@@ -47,11 +47,11 @@ stage/
 *.app
 
 # Compiled man page
-btop.1
+fbktop.1
 
 build
 bin
-btop
+fbktop
 /obj/
 config.h
 .*/

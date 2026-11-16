@@ -44,7 +44,7 @@ if(BTOP_STATIC AND NOT APPLE)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 endif()
 
-add_executable(btop src/main.cpp)
+add_executable(fbktop src/main.cpp)
 add_library(libbtop OBJECT
   src/btop.cpp
   src/btop_cli.cpp
@@ -58,11 +58,11 @@ add_library(libbtop OBJECT
   src/btop_tools.cpp
 )
 
-target_link_libraries(btop libbtop)
+target_link_libraries(fbktop libbtop)
 
 if(BTOP_LTO)
   check_ipo_supported()
-  set_target_properties(btop PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
+  set_target_properties(fbktop PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
   set_target_properties(libbtop PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
 endif()
 
@@ -75,7 +75,16 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
   target_sources(libbtop PRIVATE src/netbsd/btop_collect.cpp)
 elseif(LINUX)
-  target_sources(libbtop PRIVATE src/linux/btop_collect.cpp)
+  target_sources(libbtop PRIVATE src/linux/btop_collect.cpp src/linux/btop_netio.cpp)
+  # Per-process network usage through eBPF, enabled when libbpf is found
+  find_package(PkgConfig QUIET)
+  if(PkgConfig_FOUND)
+    pkg_check_modules(LIBBPF QUIET IMPORTED_TARGET libbpf)
+  endif()
+  if(LIBBPF_FOUND)
+    target_compile_definitions(libbtop PUBLIC NETIO_SUPPORT)
+    target_link_libraries(libbtop PkgConfig::LIBBPF)
+  endif()
   if(BTOP_GPU)
     add_subdirectory(src/linux/intel_gpu_top)
   endif()
@@ -215,7 +224,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "Midni
   # default one since all use the default ones RPATH
   if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     string(REGEX MATCH "^[0-9]+" GCC_VERSION_MAJOR "${CMAKE_CXX_COMPILER_VERSION}")
-    set_target_properties(btop PROPERTIES
+    set_target_properties(fbktop PROPERTIES
       INSTALL_RPATH "/usr/local/lib/gcc${GCC_VERSION_MAJOR}"
       BUILD_WITH_INSTALL_RPATH TRUE
     )
@@ -255,23 +264,23 @@ find_program(LOWDOWN_EXECUTABLE lowdown)
 if(LOWDOWN_EXECUTABLE)
   # Custom target to compile Markdown to man page using lowdown
   add_custom_command(
-    OUTPUT btop.1
-    COMMAND lowdown -s -T man -o btop.1 ${CMAKE_CURRENT_SOURCE_DIR}/manpage.md
+    OUTPUT fbktop.1
+    COMMAND lowdown -s -T man -o fbktop.1 ${CMAKE_CURRENT_SOURCE_DIR}/manpage.md
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/manpage.md
     VERBATIM
   )
-  add_custom_target(generate_manpage ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/btop.1)
+  add_custom_target(generate_manpage ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/fbktop.1)
   # Install the man page
-  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/btop.1" DESTINATION "share/man/man1")
+  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/fbktop.1" DESTINATION "share/man/man1")
 else()
-  message(STATUS "Command 'lowdown' not found: skipping generating man page btop.1")
+  message(STATUS "Command 'lowdown' not found: skipping generating man page fbktop.1")
 endif()
 
-install(TARGETS btop RUNTIME)
-install(FILES "btop.desktop" DESTINATION "share/applications")
-install(FILES "Img/icon.png" DESTINATION "share/icons/hicolor/48x48/apps" RENAME "btop.png")
-install(FILES "Img/icon.svg" DESTINATION "share/icons/hicolor/scalable/apps" RENAME "btop.svg")
-install(DIRECTORY "themes" DESTINATION "share/btop")
+install(TARGETS fbktop RUNTIME)
+install(FILES "fbktop.desktop" DESTINATION "share/applications")
+install(FILES "Img/icon.png" DESTINATION "share/icons/hicolor/48x48/apps" RENAME "fbktop.png")
+install(FILES "Img/icon.svg" DESTINATION "share/icons/hicolor/scalable/apps" RENAME "fbktop.svg")
+install(DIRECTORY "themes" DESTINATION "share/fbktop")
 
 include(CTest)
 if(BUILD_TESTING)
