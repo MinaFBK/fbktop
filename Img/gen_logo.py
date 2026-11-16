@@ -19,6 +19,14 @@ LETTERS = {
     "O": [" ██████╗ ", "██╔═══██╗", "██║   ██║", "██║   ██║", "╚██████╔╝", " ╚═════╝ "],
     "P": ["██████╗ ", "██╔══██╗", "██████╔╝", "██╔═══╝ ", "██║     ", "╚═╝     "],
 }
+
+# Icon glyphs "fBk": lowercase f and k (8 rows), capital B taller (10 rows), bottom-aligned.
+ICON_GLYPHS = {
+    "f": ["   █████╗", "  ██╔═══╝", "███████╗ ", "╚═██╔══╝ ", "  ██║    ", "  ██║    ", "  ██║    ", "  ╚═╝    "],
+    "B": ["█████████╗  ", "██╔═════██╗ ", "██║     ██║ ", "██║     ██║ ", "█████████╔╝ ",
+          "██╔═════██╗ ", "██║     ██║ ", "██║     ██║ ", "█████████╔╝ ", "╚════════╝  "],
+    "k": ["██╗     ", "██║     ", "██║  ██╗", "██║ ██╔╝", "█████╔╝ ", "██╔═██╗ ", "██║  ██╗", "╚═╝  ╚═╝"],
+}
 RED = ["#E62525", "#CD2121", "#B31D1D", "#9A1919", "#801414", "#801414"]
 GREY = ["#585858", "#4e4e4e", "#444444", "#3a3a3a", "#303030", "#262626"]
 CW, CH = 10, 20  # cell size
@@ -43,7 +51,22 @@ def shadow_paths(ch: str, x0: float, y0: float) -> list[str]:
     return ["M " + " L ".join(f"{x:g},{y:g}" for x, y in seg) for seg in segs]
 
 
-def art_svg(rows: list[str], ox: float, oy: float) -> str:
+def gradient(top: str, bottom: str, n: int) -> list[str]:
+    """n row colors from top to bottom; the last (shadow) row repeats the bottom color."""
+    a = [int(top[i:i + 2], 16) for i in (1, 3, 5)]
+    b = [int(bottom[i:i + 2], 16) for i in (1, 3, 5)]
+    steps = max(n - 2, 1)
+    cols = ["#" + "".join(f"{round(x + (y - x) * k / steps):02X}" for x, y in zip(a, b)) for k in range(n - 1)]
+    return cols + [cols[-1]]
+
+
+def icon_rows(word: str) -> list[str]:
+    h = max(len(ICON_GLYPHS[c]) for c in word)
+    padded = [[" " * len(ICON_GLYPHS[c][0])] * (h - len(ICON_GLYPHS[c])) + ICON_GLYPHS[c] for c in word]
+    return ["".join(g[i] for g in padded).rstrip() for i in range(h)]
+
+
+def art_svg(rows: list[str], ox: float, oy: float, red: list[str] = RED, grey: list[str] = GREY) -> str:
     out = []
     for r, row in enumerate(rows):
         y = oy + r * CH
@@ -54,11 +77,11 @@ def art_svg(rows: list[str], ox: float, oy: float) -> str:
                 start = c
                 while c < len(row) and row[c] == "█":
                     c += 1
-                out.append(f'<rect x="{ox + start * CW:g}" y="{y:g}" width="{(c - start) * CW:g}" height="{CH:g}" fill="{RED[r]}"/>')
+                out.append(f'<rect x="{ox + start * CW:g}" y="{y:g}" width="{(c - start) * CW:g}" height="{CH:g}" fill="{red[r]}"/>')
                 continue
             if row[c] != " ":
                 for d in shadow_paths(row[c], ox + c * CW, y):
-                    out.append(f'<path d="{d}" fill="none" stroke="{GREY[r]}" stroke-width="2" stroke-linecap="square"/>')
+                    out.append(f'<path d="{d}" fill="none" stroke="{grey[r]}" stroke-width="2" stroke-linecap="square"/>')
             c += 1
     return "\n  ".join(out)
 
@@ -73,14 +96,16 @@ def main() -> None:
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">\n'
         f'  {art_svg(logo_rows, 0, 0)}\n</svg>\n', encoding="utf-8")
 
-    icon_rows = LETTERS["F"]
-    size, art_w, art_h = 128, 8 * CW, 6 * CH
-    scale = 0.75
-    ox, oy = (size - art_w * scale) / 2 + 3, (size - art_h * scale) / 2
+    rows = icon_rows("fBk")
+    size = 128
+    art_w, art_h = max(len(r) for r in rows) * CW, len(rows) * CH
+    scale = (size - 20) / max(art_w, art_h)
+    ox, oy = (size - art_w * scale) / 2 + 2, (size - art_h * scale) / 2
+    red, grey = gradient(RED[0], RED[-1], len(rows)), gradient(GREY[0], GREY[-1], len(rows))
     (here / "icon.svg").write_text(
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}">\n'
         f'  <rect x="4" y="4" width="{size - 8}" height="{size - 8}" rx="18" fill="#141414" stroke="#2c2c2c" stroke-width="2"/>\n'
-        f'  <g transform="translate({ox:g},{oy:g}) scale({scale:g})">\n  {art_svg(icon_rows, 0, 0)}\n  </g>\n</svg>\n', encoding="utf-8")
+        f'  <g transform="translate({ox:g},{oy:g}) scale({scale:g})">\n  {art_svg(rows, 0, 0, red, grey)}\n  </g>\n</svg>\n', encoding="utf-8")
 
 
 if __name__ == "__main__":
