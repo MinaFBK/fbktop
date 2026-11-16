@@ -54,6 +54,7 @@ Uninstall: `sudo make uninstall`.
 | User themes | `~/.config/fbktop/themes/` |
 | Log | `~/.local/state/fbktop.log` |
 | eBPF source | `src/linux/netio/btop_netio.bpf.c` (rebuild the embedded object with `make netio-bpf`, needs clang + bpftool) |
+| Maintainer notes | `docs/dev-notes.md` |
 
 ## Credits and license
 
