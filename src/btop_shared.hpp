@@ -221,6 +221,12 @@ namespace Cpu {
 	extern tuple<int, float, long, string> current_bat;
 	extern std::optional<std::string> container_engine;
 
+#ifdef __linux__
+	//* Open the RAPL energy counter (readable by root only) while the capabilities from `make setcap` are still held,
+	//* so the CPU power draw can still be read after they are dropped
+	void open_rapl();
+#endif
+
 	struct cpu_info {
 		std::unordered_map<string, deque<long long>> cpu_percent = {
 			{"total", {}},

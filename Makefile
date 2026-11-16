@@ -423,11 +423,14 @@ setcap:
 		exit 1; \
 	fi
 	@$(call green,Setting capabilities,...)
-ifeq ($(NETIO_SUPPORT),true)
-	@setcap "cap_perfmon,cap_bpf=ep" $(DESTDIR)$(PREFIX)/bin/fbktop
-else
-	@setcap "cap_perfmon=ep" $(DESTDIR)$(PREFIX)/bin/fbktop
-endif
+#? cap_perfmon: Intel GPU stats, cap_dac_read_search: the root-only RAPL energy counter (CPU power draw), cap_bpf: the
+#? per-process network counters, only if the installed binary has them (sudo may not see the PKG_CONFIG_PATH used
+#? to build it). fbktop opens what it needs at startup and then drops all of them, see main() in src/btop.cpp.
+	@if grep -q 'tp_btf/sock_send_length' $(DESTDIR)$(PREFIX)/bin/fbktop; then \
+		setcap "cap_perfmon,cap_dac_read_search,cap_bpf=ep" $(DESTDIR)$(PREFIX)/bin/fbktop; \
+	else \
+		setcap "cap_perfmon,cap_dac_read_search=ep" $(DESTDIR)$(PREFIX)/bin/fbktop; \
+	fi
 
 #? Rebuild the embedded eBPF object for per-process network usage (needs clang, bpftool and xxd)
 BPF_CLANG ?= clang

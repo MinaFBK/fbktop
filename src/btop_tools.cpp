@@ -217,7 +217,8 @@ namespace Tools {
 		const char* str_data = &str.data()[0];
 		size_t w_len = 1 + std::mbstowcs(nullptr, str_data, 0);
 		if (w_len <= 1)	{
-			std::ranges::for_each(str, [&replacement](char& c) { if (c < 0x20) c = replacement; });
+			//? Not valid multibyte text: only replace the ASCII control bytes (unsigned, so bytes >= 0x80 are kept)
+			std::ranges::for_each(str, [&replacement](char& c) { if (static_cast<unsigned char>(c) < 0x20 or c == 0x7f) c = replacement; });
 			return str;
 		}
 		vector<wchar_t> w_str(w_len);
@@ -225,7 +226,8 @@ namespace Tools {
 		for (size_t i = 0; i < w_str.size() - 1; i++) {
 			if (widechar_wcwidth(w_str[i]) > 1)
 				continue;
-			if (w_str[i] < 0x20)
+			//? C0 controls, DEL and C1 controls (U+0080-U+009F, which some terminals treat as escape sequences)
+			if (w_str[i] < 0x20 or (w_str[i] >= 0x7f and w_str[i] < 0xa0))
 				w_str[i] = replacement;
 		}
 		size_t bytes = std::wcstombs(nullptr, w_str.data(), 0);

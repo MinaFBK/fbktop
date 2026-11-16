@@ -99,6 +99,9 @@ namespace Proc::NetIO {
 			}
 		}
 
+		//? libbpf 0.x returns error codes inside pointers unless strict mode is on, libbpf 1.x returns NULL
+		bool bad(const void* ptr) { return ptr == nullptr or libbpf_get_error(ptr) != 0; }
+
 		void read_iter(std::unordered_map<size_t, counters>& out) {
 			uint32_t key = 0, next = 0;
 			netio_bytes val{};
@@ -118,7 +121,11 @@ namespace Proc::NetIO {
 		opts.sz = sizeof(opts);
 		opts.object_name = "btop_netio";
 		obj = bpf_object__open_mem(btop_netio_bpf, btop_netio_bpf_len, &opts);
-		if (obj == nullptr) return fail(fmt::format("could not open eBPF object ({})", strerror(errno)));
+		if (bad(obj)) {
+			const long err = (obj == nullptr ? errno : -libbpf_get_error(obj));
+			obj = nullptr;
+			return fail(fmt::format("could not open eBPF object ({})", strerror((int)err)));
+		}
 
 		if (const int err = bpf_object__load(obj); err != 0) {
 			if (err == -EPERM or err == -EACCES)
@@ -129,8 +136,10 @@ namespace Proc::NetIO {
 		bpf_program* prog = nullptr;
 		bpf_object__for_each_program(prog, obj) {
 			bpf_link* link = bpf_program__attach(prog);
-			if (link == nullptr)
-				return fail(fmt::format("could not attach {} ({})", bpf_program__name(prog), strerror(errno)));
+			if (bad(link)) {
+				const long err = (link == nullptr ? errno : -libbpf_get_error(link));
+				return fail(fmt::format("could not attach {} ({})", bpf_program__name(prog), strerror((int)err)));
+			}
 			links.push_back(link);
 		}
 

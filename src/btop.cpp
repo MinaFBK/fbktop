@@ -860,11 +860,13 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 	Global::debug = cli.debug;
 
 #ifdef __linux__
-	//? Attach the eBPF network counters while the capabilities from `make setcap` are still there, then drop CAP_BPF
-	//? before any config, theme or input parsing runs: reading the already open counters needs no capability.
+	//? Attach the eBPF network counters and open the RAPL energy counter while the capabilities from `make setcap` are
+	//? still there, then drop CAP_BPF and CAP_DAC_READ_SEARCH before any config, theme or input parsing runs:
+	//? reading the already open counters needs no capability.
 	//? CAP_PERFMON stays until Shared::init has set up the GPU box (Intel GPU stats open perf events there) and is dropped after.
 	//? Root (sudo or setuid mode) keeps its privileges, as in btop.
 	Proc::NetIO::init();
+	Cpu::open_rapl();
 	#ifdef GPU_SUPPORT
 	constexpr bool keep_perfmon = true;
 	#else

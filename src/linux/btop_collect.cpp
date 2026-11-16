@@ -38,6 +38,7 @@ tab-size = 4
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <netdb.h>
+#include <fcntl.h>
 #include <sys/statvfs.h>
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -1067,9 +1068,27 @@ namespace Cpu {
 		return {percent, watts, seconds, status};
 	}
 
+	namespace {
+		int rapl_fd = -1;
+	}
+
+	void open_rapl() {
+		if (rapl_fd < 0) rapl_fd = open("/sys/class/powercap/intel-rapl:0/energy_uj", O_RDONLY | O_CLOEXEC);
+	}
+
 	long long get_cpuConsumptionUJoules()
 	{
 		long long consumption = -1;
+		//? Re-read the counter opened at startup (see open_rapl): opening it again would need the dropped capability
+		if (rapl_fd >= 0) {
+			char buf[32];
+			const ssize_t n = pread(rapl_fd, buf, sizeof(buf) - 1, 0);
+			if (n > 0) {
+				buf[n] = '\0';
+				consumption = std::strtoll(buf, nullptr, 10);
+			}
+			return consumption;
+		}
 		const auto rapl_power_usage_path = "/sys/class/powercap/intel-rapl:0/energy_uj";
 		std::ifstream file(rapl_power_usage_path);
 		if(file.good())
@@ -3383,10 +3402,11 @@ namespace Proc {
 					if (not pread.good()) continue;
 					getline(pread, new_proc.name);
 					pread.close();
+					//? Check for whitespace characters in name and set offset to get correct fields from stat file
+					//? (counted on the raw name: the stat file holds the raw bytes)
+					new_proc.name_offset = rng::count(new_proc.name, ' ');
 					//? Any process can set its own name, so strip control characters that would inject terminal escape codes
 					new_proc.name = replace_ascii_control(new_proc.name);
-					//? Check for whitespace characters in name and set offset to get correct fields from stat file
-					new_proc.name_offset = rng::count(new_proc.name, ' ');
 
 					pread.open(d.path() / "cmdline");
 					if (not pread.good()) continue;

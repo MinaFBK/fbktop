@@ -143,8 +143,9 @@ namespace Config {
 		{"proc_net", 			"#* (Linux) Show per-process network download/upload rates. Uses eBPF, needs Linux 6.3+ and\n"
 								"#* running fbktop as root or with CAP_BPF and CAP_PERFMON (make setcap). Turning it on takes effect at\n"
 								"#* the next start, because fbktop gives up those permissions right after starting."},
-		{"proc_gpu", 			"#* (Linux) Show per-process GPU usage (busiest GPU engine) from DRM fdinfo. Works with amdgpu, i915 and\n"
-							"#* other drivers that report drm-engine usage. Processes of other users show 0 unless fbktop runs as root."},
+		{"proc_gpu", 			"#* (Linux) Show per-process GPU usage (busiest GPU engine) from DRM fdinfo. Works with amdgpu, i915, xe, msm,\n"
+							"#* panfrost, v3d and panthor (with its profiling switch on). nouveau and NVIDIA's driver don't report it.\n"
+							"#* Processes of other users show 0 unless fbktop runs as root."},
 
 		{"proc_cpu_graphs",     "#* Show cpu graph for each process."},
 
@@ -774,8 +775,13 @@ namespace Config {
 
 	void load(const fs::path& conf_file, vector<string>& load_warnings) {
 		std::error_code error;
-		startup_sorting = strings.at("proc_sorting");
-		startup_reversed = bools.at("proc_reversed");
+		//? The first call runs before anything changes the values, so these are the built-in defaults. A reload (ctrl+r)
+		//? must not seed the startup sort from the session's arrow-key/click sort, or a file without the key would save it.
+		static const string default_sorting = strings.at("proc_sorting");
+		static const bool default_reversed = bools.at("proc_reversed");
+		startup_sorting = default_sorting;
+		startup_reversed = default_reversed;
+		bool file_sorting = false, file_reversed = false;
 		if (conf_file.empty())
 			return;
 		else if (not fs::exists(conf_file, error)) {
@@ -813,8 +819,10 @@ namespace Config {
 					cread >> value;
 					if (not isbool(value))
 						load_warnings.push_back("Got an invalid bool value for config name: " + name);
-					else
+					else {
 						bools.at(name) = stobool(value);
+						if (name == "proc_reversed") file_reversed = true;
+					}
 				}
 				else if (ints.contains(name)) {
 					cread >> value;
@@ -835,16 +843,18 @@ namespace Config {
 
 					if (not stringValid(name, value))
 						load_warnings.push_back(validError);
-					else
+					else {
 						strings.at(name) = value;
+						if (name == "proc_sorting") file_sorting = true;
+					}
 				}
 
 				cread.ignore(SSmax, '\n');
 			}
 
 			if (not load_warnings.empty()) write_new = true;
-			startup_sorting = strings.at("proc_sorting");
-			startup_reversed = bools.at("proc_reversed");
+			if (file_sorting) startup_sorting = strings.at("proc_sorting");
+			if (file_reversed) startup_reversed = bools.at("proc_reversed");
 		}
 	}
 

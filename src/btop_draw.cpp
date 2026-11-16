@@ -1836,8 +1836,9 @@ namespace Proc {
 			net_cols = (not show_net ? 0 : (width >= 90 ? 2 : (width > 55 ? 1 : 0)));
 			cmd_size -= net_cols * 6;
 			tree_size -= net_cols * 6;
-			//? GPU: one column when there is room
-			gpu_cols = (show_gpu and width >= 70 ? 1 : 0);
+			//? GPU: one column when there is room, without squeezing the command field below one visible column
+			//? ("Threads" is drawn over its last 4 columns; a 0-wide field also throws the header out of line)
+			gpu_cols = (show_gpu and width >= 70 and (proc_tree or cmd_size - 6 >= 1 + max(0, thread_size)) ? 1 : 0);
 			cmd_size -= gpu_cols * 6;
 			tree_size -= gpu_cols * 6;
 

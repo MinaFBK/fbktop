@@ -26,9 +26,9 @@ GPU usage comes from the kernel's DRM fdinfo files (`/proc/<pid>/fdinfo/<fd>`), 
 
 - **Linux 6.3 or newer** with BTF enabled (standard on Debian 13, Ubuntu 24.04, Fedora, Arch). Debian 12 (kernel 6.1) and Ubuntu 22.04 on kernel 5.15 are too old.
 - **libbpf** development files to build (`libbpf-dev` on Debian/Ubuntu, `libbpf-devel` on Fedora, `libbpf` on Arch). Without them it still builds, just without the network columns.
-- **Permission to load eBPF**: run as root, or give the binary `CAP_BPF` and `CAP_PERFMON` once with `sudo make setcap`.
+- **Permission to load eBPF**: run as root, or give the binary its permissions once with `sudo make setcap` (`CAP_BPF` for the network counters, `CAP_PERFMON` for Intel GPU stats, `CAP_DAC_READ_SEARCH` for the root-only CPU power counter, as in btop).
 
-If any of these is missing, fbktop runs like normal btop with the network columns hidden; the reason is written to `~/.local/state/fbktop.log`. The Gpu% column needs no extra permission or library; it appears once a GPU driver that reports engine usage is found (NVIDIA's proprietary driver does not).
+If any of these is missing, fbktop runs like normal btop with the network columns hidden; the reason is written to `~/.local/state/fbktop.log`. The Gpu% column needs no extra permission or library; it appears once a GPU driver that reports engine usage is found: amdgpu, i915, xe, msm, panfrost, v3d, and panthor with its profiling switch on. nouveau and NVIDIA's proprietary driver don't report it. On PCs with two GPUs each GPU's engines are kept apart, so a process shows its busier GPU.
 
 ## Install
 
@@ -44,7 +44,7 @@ fbktop
 Rebuilding or reinstalling replaces the binary and drops its permissions, so run `sudo make setcap` again after every `make install`.
 
 How the permissions are kept safe:
-- fbktop uses `CAP_BPF` only to attach the network counters at startup, before it reads any config, theme or input, then gives it up. `CAP_PERFMON` is given up once the GPU box is set up (Intel GPU stats need it then). After that the process holds no capabilities, so a bug later on cannot be used to gain them. Because of this, turning `proc_net` on in the options menu takes effect at the next start.
+- fbktop uses `CAP_BPF` only to attach the network counters and `CAP_DAC_READ_SEARCH` only to open the CPU power counter, both at startup before it reads any config, theme or input, then gives them up. `CAP_PERFMON` is given up once the GPU box is set up (Intel GPU stats need it then). After that the process holds no capabilities, so a bug later on cannot be used to gain them. Because of this, turning `proc_net` on in the options menu takes effect at the next start.
 - `make install` copies with `install`, so under `sudo` every installed file is owned by root and writable only by root. `make setcap` refuses to run on a binary that anyone else could change.
 - If an older fbktop was installed with `cp -p` (files owned by your user), fix the leftover folders once: `sudo chown -R root:root /usr/local/share/fbktop /usr/local/share/doc/fbktop && sudo chmod -R go-w /usr/local/share/fbktop /usr/local/share/doc/fbktop`, then install again.
 
@@ -65,4 +65,4 @@ Uninstall: `sudo make uninstall`.
 
 Based on [btop](https://github.com/aristocratos/btop) by Jakob P. Liljenberg (aristocratos), licensed under the Apache License 2.0 (see `LICENSE`). Internal file and namespace names are kept from btop so upstream fixes can still be merged.
 
-Files changed from btop v1.4.8: `Makefile`, `CMakeLists.txt`, `README.md`, `manpage.md`, `ansi_banner.utf8`, `fbktop.desktop` (was `btop.desktop`), `Img/icon.*`, `Img/logo.*`, `Img/gen_logo.py` (new), `src/btop.cpp`, `src/btop_cli.cpp`, `src/btop_config.cpp`, `src/btop_config.hpp`, `src/btop_draw.cpp`, `src/btop_input.cpp`, `src/btop_log.cpp`, `src/btop_menu.cpp`, `src/btop_shared.cpp`, `src/btop_shared.hpp`, `src/btop_tools.cpp`, `src/btop_tools.hpp`, `src/linux/btop_collect.cpp`, `src/linux/btop_gpuproc.cpp` (new), `src/linux/btop_netio.cpp` (new), `src/linux/netio/` (new), `tests/tools.cpp`. Removed: btop's GitHub workflows and funding file.
+Files changed from btop v1.4.8: `Makefile`, `CMakeLists.txt`, `README.md`, `manpage.md`, `ansi_banner.utf8`, `fbktop.desktop` (was `btop.desktop`), `Img/icon.*`, `Img/logo.*`, `Img/gen_logo.py` (new), `src/btop.cpp`, `src/btop_cli.cpp`, `src/btop_config.cpp`, `src/btop_config.hpp`, `src/btop_draw.cpp`, `src/btop_input.cpp`, `src/btop_log.cpp`, `src/btop_menu.cpp`, `src/btop_shared.cpp`, `src/btop_shared.hpp`, `src/btop_tools.cpp`, `src/btop_tools.hpp`, `src/linux/btop_collect.cpp`, `src/linux/btop_gpuproc.cpp` (new), `src/linux/btop_netio.cpp` (new), `src/linux/netio/` (new), `tests/tools.cpp`. Removed: btop's GitHub workflows, funding file and snap recipe.
