@@ -10,9 +10,30 @@ Facts for working on fbktop that the README doesn't cover.
 - Renamed from the btop patch on 2026-11-16. Only user-facing names changed (command, config, log,
   banner, icon); internals stay `btop_*` so upstream merges stay clean.
 
+## Capabilities (security model)
+
+- Commits be82b32, 87ae426, after a security review on 2026-11-16. `main()` attaches the eBPF
+  counters (`Proc::NetIO::init`) and opens the root-only RAPL counter (`Cpu::open_rapl`) right after
+  `Cli::parse`, then drops every capability except CAP_PERFMON. Everything is dropped after
+  `Shared::init`, where the Intel GPU perf events are opened. Root and setuid mode are left alone.
+- Reading and deleting entries of the already open BPF map needs no capability on Linux 6.3+:
+  `kernel/bpf/syscall.c` in 6.3, 6.4 and 6.5 only gates MAP_CREATE and PROG_LOAD.
+- Test without sudo: `unshare --user --map-current-user --keep-caps bin/fbktop` gives namespace caps.
+  Check `CapEff` of every thread in `/proc/<pid>/task/*/status`; it should end at 0.
+- `make setcap` grants `cap_perfmon,cap_dac_read_search` plus `cap_bpf` if the installed binary
+  contains the BPF object. It refuses a binary that isn't root-owned or is writable by anyone else.
+- The embedded BPF object's BTF had the builder's home path. It was replaced in place (same length,
+  NUL padded) because clang/bpftool aren't installed here. `make netio-bpf` now passes
+  `-fdebug-prefix-map`, not yet tried.
+- Known limits: any user running fbktop sees the per-process network of other users' processes (kept
+  on purpose, documented in the README); container PID namespaces map host pids; the binary links
+  `libbpf.so.1`.
+
 ## Gpu% column
 
-- Code: `src/linux/btop_gpuproc.cpp` (commit 882c280). Value = busiest engine from DRM fdinfo.
+- Code: `src/linux/btop_gpuproc.cpp` (commit 882c280, xe/pdev in 87ae426). Value = busiest engine
+  from DRM fdinfo: `drm-engine-* ns` (amdgpu, i915, ...) or `drm-cycles-*`/`drm-total-cycles-*` (xe).
+  Engines are keyed by `drm-pdev`, so two GPUs aren't summed. No scanning while `/dev/dri` is empty.
 - fd scan: once when a pid appears, then only if the process used CPU and 5 updates have passed
   since its last scan (30 if it already has a GPU client).
 - Checked against an independent fdinfo script: within 1-2 points. Cost: about +0.01-0.03 s CPU
