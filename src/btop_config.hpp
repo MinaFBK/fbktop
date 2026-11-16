@@ -61,6 +61,10 @@ namespace Config {
 
 	extern bool write_new;
 
+	//* proc_sorting value written to the config file: the sort fbktop starts with.
+	//* Set from the config file and the options menu; arrow-key sort changes only last for the session.
+	extern string startup_sorting;
+
 	constexpr int ONE_DAY_MILLIS = 1000 * 60 * 60 * 24;
 
 	[[nodiscard]] std::optional<std::filesystem::path> get_config_dir() noexcept;

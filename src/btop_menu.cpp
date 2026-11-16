@@ -829,7 +829,11 @@ namespace Menu {
 				"\"cpu direct\" updates top process",
 				"directly.",
 				"",
-				"\"network\" sorts by download + upload."},
+				"\"network\" sorts by download + upload.",
+				"",
+				"This is the sort fbktop starts with.",
+				"Sorting with the arrow keys only",
+				"lasts until fbktop exits."},
 			{"proc_reversed",
 				"Reverse processes sorting order.",
 				"",
@@ -1581,6 +1585,7 @@ static int optionsMenu(const string& key) {
 				}
 				else {
 					Config::set(option, optList.at(i));
+					if (option == "proc_sorting") Config::startup_sorting = optList.at(i);
 
 					if (option == "log_level") {
 						Logger::set_log_level(optList.at(i));
