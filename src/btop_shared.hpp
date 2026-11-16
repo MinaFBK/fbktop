@@ -96,6 +96,12 @@ namespace Shared {
 	//* Initialize platform specific needed variables and check for errors
 	void init();
 
+#ifdef __linux__
+	//* Give up the capabilities from `make setcap` for the calling thread, keeping CAP_PERFMON if <keep_perfmon>.
+	//* Returns false if they could not be dropped.
+	bool drop_caps(bool keep_perfmon);
+#endif
+
 	extern long coreCount, page_size, clk_tck;
 
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
@@ -444,6 +450,10 @@ namespace Proc {
 
 		//* Drop counters for pids that no longer exist
 		void forget(const vector<size_t>& pids);
+
+		//* Detach the eBPF counters (proc_net off at startup). They can't be attached again later in the session,
+		//* because fbktop gives up CAP_BPF right after startup.
+		void stop();
 	}
 
 	//* Per-process GPU usage from DRM fdinfo (Linux)

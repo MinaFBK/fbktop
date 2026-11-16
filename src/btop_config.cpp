@@ -141,7 +141,8 @@ namespace Config {
 		{"proc_mem_bytes", 		"#* Show process memory as bytes instead of percent."},
 
 		{"proc_net", 			"#* (Linux) Show per-process network download/upload rates. Uses eBPF, needs Linux 6.3+ and\n"
-								"#* running fbktop as root or with CAP_BPF and CAP_PERFMON (make setcap)."},
+								"#* running fbktop as root or with CAP_BPF and CAP_PERFMON (make setcap). Turning it on takes effect at\n"
+								"#* the next start, because fbktop gives up those permissions right after starting."},
 		{"proc_gpu", 			"#* (Linux) Show per-process GPU usage (busiest GPU engine) from DRM fdinfo. Works with amdgpu, i915 and\n"
 							"#* other drivers that report drm-engine usage. Processes of other users show 0 unless fbktop runs as root."},
 

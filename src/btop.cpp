@@ -859,6 +859,23 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 
 	Global::debug = cli.debug;
 
+#ifdef __linux__
+	//? Attach the eBPF network counters while the capabilities from `make setcap` are still there, then drop CAP_BPF
+	//? before any config, theme or input parsing runs: reading the already open counters needs no capability.
+	//? CAP_PERFMON stays until Shared::init has set up the GPU box (Intel GPU stats open perf events there) and is dropped after.
+	//? Root (sudo or setuid mode) keeps its privileges, as in btop.
+	Proc::NetIO::init();
+	#ifdef GPU_SUPPORT
+	constexpr bool keep_perfmon = true;
+	#else
+	constexpr bool keep_perfmon = false;
+	#endif
+	if (Global::set_uid != 0 and not Shared::drop_caps(keep_perfmon)) {
+		Global::exit_error_msg = "Failed to drop capabilities. Quitting!";
+		clean_quit(1);
+	}
+#endif
+
 	{
 		const auto config_dir = Config::get_config_dir();
 
@@ -932,6 +949,15 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 
 	//? Config init
 	init_config(cli.low_color, cli.filter);
+
+#ifdef __linux__
+	if (not Config::getB("proc_net"))
+		Proc::NetIO::stop();
+	else if (Proc::NetIO::active)
+		Logger::debug("Per-process network usage enabled (eBPF).");
+	else
+		Logger::warning("Per-process network usage disabled: {}", Proc::NetIO::status);
+#endif
 
 	//? Try to find and set a UTF-8 locale
 	if (std::setlocale(LC_ALL, "") != nullptr and not std::string_view { std::setlocale(LC_ALL, "") }.contains(";")
@@ -1034,6 +1060,13 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 		Global::exit_error_msg = fmt::format("Exception in Shared::init() -> {}", e.what());
 		clean_quit(1);
 	}
+
+#ifdef __linux__
+	if (Global::set_uid != 0 and not Shared::drop_caps(false)) {
+		Global::exit_error_msg = "Failed to drop capabilities. Quitting!";
+		clean_quit(1);
+	}
+#endif
 
 	if (not Config::set_boxes(Config::getS("shown_boxes"))) {
 		Config::set_boxes("cpu mem net proc");

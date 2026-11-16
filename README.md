@@ -43,6 +43,11 @@ fbktop
 
 Rebuilding or reinstalling replaces the binary and drops its permissions, so run `sudo make setcap` again after every `make install`.
 
+How the permissions are kept safe:
+- fbktop uses `CAP_BPF` only to attach the network counters at startup, before it reads any config, theme or input, then gives it up. `CAP_PERFMON` is given up once the GPU box is set up (Intel GPU stats need it then). After that the process holds no capabilities, so a bug later on cannot be used to gain them. Because of this, turning `proc_net` on in the options menu takes effect at the next start.
+- `make install` copies with `install`, so under `sudo` every installed file is owned by root and writable only by root. `make setcap` refuses to run on a binary that anyone else could change.
+- If an older fbktop was installed with `cp -p` (files owned by your user), fix the leftover folders once: `sudo chown -R root:root /usr/local/share/fbktop /usr/local/share/doc/fbktop && sudo chmod -R go-w /usr/local/share/fbktop /usr/local/share/doc/fbktop`, then install again.
+
 Uninstall: `sudo make uninstall`.
 
 ## Files

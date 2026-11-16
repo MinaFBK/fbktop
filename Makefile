@@ -143,7 +143,7 @@ endif
 #? Any flags added to TESTFLAGS must not contain whitespace for the testing to work
 override TESTFLAGS := -fexceptions -fstack-clash-protection -fcf-protection
 ifneq ($(PLATFORM) $(ARCH),macos arm64)
-	override TESTFLAGS += -fstack-protector
+	override TESTFLAGS += -fstack-protector-strong
 endif
 
 ifeq ($(STATIC),true)
@@ -177,6 +177,9 @@ ifeq ($(PLATFORM_LC),linux)
 	PLATFORM_DIR := linux
 	THREADS	:= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
 	SU_GROUP := root
+	#? Hardening for a binary that may get capabilities: full RELRO, and buffer overflow checks in optimized builds
+	override LDFLAGS += -Wl,-z,relro,-z,now
+	FORTIFY := -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3
 else ifeq ($(PLATFORM_LC),$(filter $(PLATFORM_LC),freebsd midnightbsd))
 	PLATFORM_DIR := freebsd
 	THREADS	:= $(shell getconf NPROCESSORS_ONLN 2>/dev/null || echo 1)
@@ -250,7 +253,7 @@ override GOODFLAGS := $(foreach flag,$(TESTFLAGS),$(strip $(shell echo "int main
 #? Flags, Libraries and Includes
 override REQFLAGS   := -std=c++23
 WARNFLAGS			:= -Wall -Wextra -pedantic
-OPTFLAGS			:= -O2 $(LTO)
+OPTFLAGS			:= -O2 $(LTO) $(FORTIFY)
 LDCXXFLAGS			:= -pthread -DFMT_HEADER_ONLY -D_GLIBCXX_ASSERTIONS -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_DEBUG -D_FILE_OFFSET_BITS=64 $(GOODFLAGS) $(ADDFLAGS)
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
@@ -377,30 +380,31 @@ distclean: clean
 	@rm -rf $(TARGETDIR)
 	@test -e lib/rocm_smi_lib/build && rm -rf lib/rocm_smi_lib/build || true
 
+#? install (not cp -p) so the installed files belong to whoever runs it (root under sudo), not to the user who built them:
+#? the binary gets capabilities and every user reads the themes, so nobody else may be able to change them
 install:
 	@$(call green,Installing binary to: $(WHITE)$(DESTDIR)$(PREFIX)/bin/fbktop)
-	@mkdir -p $(DESTDIR)$(PREFIX)/bin
-	@cp -p $(TARGETDIR)/fbktop $(DESTDIR)$(PREFIX)/bin/fbktop
-	@chmod 755 $(DESTDIR)$(PREFIX)/bin/fbktop
+	@install -d -m 0755 $(DESTDIR)$(PREFIX)/bin
+	@install -m 0755 $(TARGETDIR)/fbktop $(DESTDIR)$(PREFIX)/bin/fbktop
 	@$(call green,Installing doc to: $(WHITE)$(DESTDIR)$(PREFIX)/share/doc/fbktop)
-	@mkdir -p $(DESTDIR)$(PREFIX)/share/doc/fbktop
-	@cp -p README.md $(DESTDIR)$(PREFIX)/share/doc/fbktop
-	@mkdir -p $(DESTDIR)$(PREFIX)/share/fbktop
+	@install -d -m 0755 $(DESTDIR)$(PREFIX)/share/doc/fbktop
+	@install -m 0644 README.md $(DESTDIR)$(PREFIX)/share/doc/fbktop/README.md
 	@$(call green,Installing themes to: $(WHITE)$(DESTDIR)$(PREFIX)/share/fbktop/themes)
-	@cp -pr themes $(DESTDIR)$(PREFIX)/share/fbktop
+	@install -d -m 0755 $(DESTDIR)$(PREFIX)/share/fbktop/themes
+	@install -m 0644 themes/*.theme $(DESTDIR)$(PREFIX)/share/fbktop/themes
 	@$(call green,Installing desktop entry to: ,$(WHITE)$(DESTDIR)$(PREFIX)/share/applications/fbktop.desktop)
-	@mkdir -p $(DESTDIR)$(PREFIX)/share/applications/
-	@cp -p fbktop.desktop $(DESTDIR)$(PREFIX)/share/applications/fbktop.desktop
+	@install -d -m 0755 $(DESTDIR)$(PREFIX)/share/applications
+	@install -m 0644 fbktop.desktop $(DESTDIR)$(PREFIX)/share/applications/fbktop.desktop
 	@$(call green,Installing PNG icon to: ,$(WHITE)$(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/fbktop.png)
-	@mkdir -p $(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps
-	@cp -p Img/icon.png $(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/fbktop.png
+	@install -d -m 0755 $(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps
+	@install -m 0644 Img/icon.png $(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/fbktop.png
 	@$(call green,Installing SVG icon to: ,$(WHITE)$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/fbktop.svg)
-	@mkdir -p $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps
-	@cp -p Img/icon.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/fbktop.svg
+	@install -d -m 0755 $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps
+	@install -m 0644 Img/icon.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/fbktop.svg
 ifneq ($(wildcard fbktop.1),)
 	@$(call green,Installing man page to: ,$(WHITE)$(DESTDIR)$(PREFIX)/share/man/man1/fbktop.1)
-	@mkdir -p $(DESTDIR)$(PREFIX)/share/man/man1
-	@cp -p fbktop.1 $(DESTDIR)$(PREFIX)/share/man/man1/fbktop.1
+	@install -d -m 0755 $(DESTDIR)$(PREFIX)/share/man/man1
+	@install -m 0644 fbktop.1 $(DESTDIR)$(PREFIX)/share/man/man1/fbktop.1
 endif
 
 #? Set SUID bit for fbktop as $SU_USER in $SU_GROUP
@@ -414,6 +418,10 @@ setuid:
 #? Run setcap on fbktop for extended capabilities
 setcap:
 	@$(call white,File: $(DESTDIR)$(PREFIX)/bin/fbktop)
+	@if [ "$$(stat -c %u $(DESTDIR)$(PREFIX)/bin/fbktop)" != 0 ] || [ -n "$$(find $(DESTDIR)$(PREFIX)/bin/fbktop -perm /022)" ]; then \
+		echo "Refusing to set capabilities: $(DESTDIR)$(PREFIX)/bin/fbktop must be owned by root and writable only by root. Run 'sudo make install' first." >&2; \
+		exit 1; \
+	fi
 	@$(call green,Setting capabilities,...)
 ifeq ($(NETIO_SUPPORT),true)
 	@setcap "cap_perfmon,cap_bpf=ep" $(DESTDIR)$(PREFIX)/bin/fbktop
@@ -429,7 +437,7 @@ netio-bpf: | directories
 	@$(call green,Generating vmlinux.h from running kernel BTF,...)
 	@$(BPFTOOL) btf dump file /sys/kernel/btf/vmlinux format c > $(BUILDDIR)/vmlinux.h
 	@$(call green,Compiling ,$(NETIO_BPF_DIR)/btop_netio.bpf.c)
-	@$(BPF_CLANG) -g -O2 -Wall -target bpf -D__TARGET_ARCH_x86 -I$(BUILDDIR) $(NETIO_CFLAGS) -c $(NETIO_BPF_DIR)/btop_netio.bpf.c -o $(BUILDDIR)/btop_netio.bpf.o
+	@$(BPF_CLANG) -g -O2 -Wall -target bpf -D__TARGET_ARCH_x86 -fdebug-prefix-map=$(CURDIR)/= -I$(BUILDDIR) $(NETIO_CFLAGS) -c $(NETIO_BPF_DIR)/btop_netio.bpf.c -o $(BUILDDIR)/btop_netio.bpf.o
 	@$(BPFTOOL) gen object $(BUILDDIR)/btop_netio.o $(BUILDDIR)/btop_netio.bpf.o
 	@{ echo '// Generated by `make netio-bpf` from btop_netio.bpf.c. Do not edit.'; echo '#pragma once'; \
 	  cd $(BUILDDIR) && xxd -i -n btop_netio_bpf btop_netio.o | sed -e 's/^unsigned char/alignas(8) static const unsigned char/' -e 's/^unsigned int/static const unsigned int/'; } > $(NETIO_BPF_DIR)/btop_netio.bpf.h

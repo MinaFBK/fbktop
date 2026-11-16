@@ -71,9 +71,9 @@ namespace Proc::NetIO {
 			map_fd = -1;
 		}
 
+		//? Runs before the logger is set up, main() logs <status> once the config is loaded
 		bool fail(std::string reason) {
 			status = std::move(reason);
-			Logger::warning("Per-process network usage disabled: {}", status);
 			cleanup();
 			return false;
 		}
@@ -139,8 +139,14 @@ namespace Proc::NetIO {
 
 		status = "active";
 		active = true;
-		Logger::debug("Per-process network usage enabled (eBPF).");
 		return true;
+	}
+
+	void stop() {
+		if (not active) return;
+		active = false;
+		status = "turned off (proc_net = false)";
+		cleanup();
 	}
 
 	bool read(std::unordered_map<size_t, counters>& out) {
@@ -175,5 +181,7 @@ namespace Proc::NetIO {
 	}
 
 	void forget(const vector<size_t>&) {}
+
+	void stop() {}
 #endif
 }

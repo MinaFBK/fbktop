@@ -39,7 +39,15 @@ tab-size = 4
 #include <net/if.h>
 #include <netdb.h>
 #include <sys/statvfs.h>
+#include <sys/syscall.h>
 #include <unistd.h>
+#include <linux/capability.h>
+#include <cstring>
+
+//? Older kernel headers (before Linux 5.8) don't name CAP_PERFMON
+#ifndef CAP_PERFMON
+#define CAP_PERFMON 38
+#endif
 
 #include <fmt/format.h>
 #include <fmt/std.h>
@@ -429,6 +437,35 @@ namespace Shared {
 		Mem::collect();
 
 		Logger::debug("Shared::init() : Initialized.");
+	}
+
+	bool drop_caps(bool keep_perfmon) {
+		__user_cap_header_struct header{_LINUX_CAPABILITY_VERSION_3, 0};
+		__user_cap_data_struct now[_LINUX_CAPABILITY_U32S_3]{};
+		if (syscall(SYS_capget, &header, now) != 0) return false;
+		__user_cap_data_struct next[_LINUX_CAPABILITY_U32S_3]{};
+		if (keep_perfmon) {
+			const auto bit = 1u << (CAP_PERFMON % 32);
+			next[CAP_PERFMON / 32].permitted = now[CAP_PERFMON / 32].permitted & bit;
+			next[CAP_PERFMON / 32].effective = now[CAP_PERFMON / 32].effective & bit;
+		}
+		if (std::memcmp(now, next, sizeof(now)) == 0) return true;
+		if (syscall(SYS_capset, &header, next) != 0) return false;
+		if (keep_perfmon) return true;
+
+		//? Capabilities belong to threads: threads started before this call (e.g. by GPU libraries) keep theirs
+		size_t holding = 0;
+		std::error_code ec;
+		for (const auto& task : fs::directory_iterator("/proc/self/task", ec)) {
+			std::ifstream status(task.path() / "status");
+			for (string line; getline(status, line);) {
+				if (not line.starts_with("CapPrm:")) continue;
+				if (line.find_first_not_of("0", line.find_first_not_of(" \t", 7)) != string::npos) ++holding;
+				break;
+			}
+		}
+		if (holding > 0) Logger::warning("{} thread(s) started by a library still hold capabilities.", holding);
+		return true;
 	}
 }
 
@@ -3280,15 +3317,11 @@ namespace Proc {
 				pread.close();
 			}
 
-			//? Read cumulative per-process network counters (eBPF), loaded on first use
+			//? Read cumulative per-process network counters (eBPF, attached in main() at startup)
 			static std::unordered_map<size_t, NetIO::counters> net_counters;
 			static std::chrono::steady_clock::time_point net_last;
-			static bool net_tried = false, net_primed = false;
+			static bool net_primed = false;
 			const bool show_net = Config::getB("proc_net");
-			if (show_net and not net_tried) {
-				net_tried = true;
-				NetIO::init();
-			}
 			const bool net_ok = show_net and NetIO::read(net_counters);
 			const auto net_now = std::chrono::steady_clock::now();
 			const double net_secs = max(0.001, std::chrono::duration<double>(net_now - net_last).count());
