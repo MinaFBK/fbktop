@@ -17,6 +17,7 @@ tab-size = 4
 */
 
 #include <algorithm>
+#include <chrono>
 #include <charconv>
 #include <cmath>
 #include <cstdlib>
@@ -3279,6 +3280,21 @@ namespace Proc {
 				pread.close();
 			}
 
+			//? Read cumulative per-process network counters (eBPF), loaded on first use
+			static std::unordered_map<size_t, NetIO::counters> net_counters;
+			static std::chrono::steady_clock::time_point net_last;
+			static bool net_tried = false, net_primed = false;
+			const bool show_net = Config::getB("proc_net");
+			if (show_net and not net_tried) {
+				net_tried = true;
+				NetIO::init();
+			}
+			const bool net_ok = show_net and NetIO::read(net_counters);
+			const auto net_now = std::chrono::steady_clock::now();
+			const double net_secs = max(0.001, std::chrono::duration<double>(net_now - net_last).count());
+			net_last = net_now;
+			if (not net_ok) net_primed = false;
+
 			//? Get cpu total times from /proc/stat up to the guest field
 			cputimes = 0;
 			pread.open(Shared::procPath / "stat");
@@ -3470,9 +3486,40 @@ namespace Proc {
 				//? Update cached value with latest cpu times
 				new_proc.cpu_t = cpu_t;
 
+				//? Process network rates since last update
+				if (net_ok) {
+					uint64_t rx_t = 0, tx_t = 0;
+					if (auto found_net = net_counters.find(pid); found_net != net_counters.end()) {
+						found_net->second.seen = true;
+						rx_t = found_net->second.rx;
+						tx_t = found_net->second.tx;
+					}
+					//? A total going backwards means the counter was reset (pid reuse or eviction)
+					const auto rate = [&](const uint64_t total, uint64_t& last_total) -> uint64_t {
+						const uint64_t r = (net_primed and total >= last_total) ? (uint64_t)round((total - last_total) / net_secs) : 0;
+						last_total = total;
+						return r;
+					};
+					new_proc.net_rx = rate(rx_t, new_proc.net_rx_t);
+					new_proc.net_tx = rate(tx_t, new_proc.net_tx_t);
+				}
+				else {
+					new_proc.net_rx = new_proc.net_tx = 0;
+				}
+
 				if (show_detailed and not got_detailed and new_proc.pid == detailed_pid) {
 					got_detailed = true;
 				}
+			}
+
+			//? Drop network counters of pids that are gone or not tracked
+			if (net_ok) {
+				static vector<size_t> net_gone;
+				net_gone.clear();
+				for (const auto& [net_pid, net_c] : net_counters)
+					if (not net_c.seen) net_gone.push_back(net_pid);
+				NetIO::forget(net_gone);
+				net_primed = true;
 			}
 
 			//? Clear dead processes from current_procs and remove kernel processes if enabled and not paused
@@ -3493,6 +3540,7 @@ namespace Proc {
 						if (!keep_dead_proc_usage) {
 							r.cpu_p = 0.0;
 							r.mem = 0;
+							r.net_rx = r.net_tx = 0;
 						}
 					}
 				}

@@ -1617,12 +1617,19 @@ namespace Proc {
 	Draw::TextEdit filter;
 	Draw::Graph detailed_cpu_graph;
 	Draw::Graph detailed_mem_graph;
-	int user_size, thread_size, prog_size, cmd_size, tree_size;
+	int user_size, thread_size, prog_size, cmd_size, tree_size, net_cols;
+	bool net_shown = false;
 	int dgraph_x, dgraph_width, d_width, d_x, d_y;
 	bool previous_proc_banner_state = false;
 	atomic<bool> resized (false);
 
 	string box;
+
+	//? Map a byte rate to 0-100 on a log scale (1 B/s -> 0, 1 KiB/s -> ~38, 1 MiB/s -> ~75, 100 MiB/s+ -> 100) for coloring
+	static int net_level(const uint64_t rate) {
+		if (rate == 0) return 0;
+		return clamp((int)round(std::log10((double)rate) * 100.0 / 8.0), 0, 100);
+	}
 
 	int selection(const std::string_view cmd_key) {
 		auto start = Config::getI("proc_start");
@@ -1716,6 +1723,7 @@ namespace Proc {
 		auto mem_bytes = Config::getB("proc_mem_bytes");
 		auto vim_keys = Config::getB("vim_keys");
 		auto show_graphs = Config::getB("proc_cpu_graphs");
+		const bool show_net = Config::getB("proc_net") and NetIO::active;
 		const auto pause_proc_list = Config::getB("pause_proc_list");
 		auto follow_process = Config::getB("follow_process");
 		int followed_pid = Config::getI("followed_pid");
@@ -1732,6 +1740,11 @@ namespace Proc {
 		auto totalMem = Mem::get_totalMem();
 		int numpids = Proc::numpids;
 		if (force_redraw) redraw = true;
+		//? Network columns appear once the eBPF counters are attached, which can happen after the first draw
+		if (show_net != net_shown) {
+			net_shown = show_net;
+			redraw = true;
+		}
 		string out;
 		out.reserve(width * height);
 
@@ -1813,6 +1826,10 @@ namespace Proc {
 				cmd_size += 5;
 				tree_size += 5;
 			}
+			//? Network: down + up columns when wide, one combined column when narrow, none when cramped
+			net_cols = (not show_net ? 0 : (width >= 90 ? 2 : (width > 55 ? 1 : 0)));
+			cmd_size -= net_cols * 6;
+			tree_size -= net_cols * 6;
 
 			//? Detailed box
 			if (show_detailed) {
@@ -1991,6 +2008,7 @@ namespace Proc {
 
 			out += (thread_size > 0 ? Mv::l(4) + "Threads: " : "")
 					+ ljust("User:", user_size) + ' '
+					+ (net_cols == 2 ? rjust("Down", 5) + ' ' + rjust("Up", 5) + ' ' : (net_cols == 1 ? rjust("Net", 5) + ' ' : ""))
 					+ rjust((mem_bytes ? "MemB" : "Mem%"), 5) + ' '
 					+ rjust("Cpu%", (show_graphs ? 10 : 5)) + Fx::ub;
 		}
@@ -2022,6 +2040,26 @@ namespace Proc {
 			if (item_fit >= 7) out += cjust(to_string(detailed.entry.threads), item_width);
 			if (item_fit >= 8) out += cjust(to_string(detailed.entry.p_nice), item_width);
 
+
+			//? Network line, rates and totals since btop started counting
+			if (show_net) {
+				const int line_w = d_width - 2;
+				const string val_color = alive ? Theme::c("main_fg") : Theme::c("inactive_fg");
+				const array<std::pair<string, string>, 3> parts {{
+					{"Download: ", floating_humanizer(detailed.entry.net_rx, false, 0, false, true)},
+					{"Upload: ", floating_humanizer(detailed.entry.net_tx, false, 0, false, true)},
+					{"Total: ", Symbols::down + floating_humanizer(detailed.entry.net_rx_t) + ' ' + Symbols::up + floating_humanizer(detailed.entry.net_tx_t)},
+				}};
+				string line;
+				int used = 0;
+				for (const auto& [label, value] : parts) {
+					const int part_w = ulen(label) + ulen(value) + (used > 0 ? 3 : 0);
+					if (used + part_w > line_w) break;
+					line += (used > 0 ? "   " : "") + Theme::c("title") + Fx::b + label + Fx::ub + val_color + value;
+					used += part_w;
+				}
+				out += Mv::to(d_y + 3, d_x + 1) + line + string(max(0, line_w - used), ' ');
+			}
 
 			const double mem_p = detailed.mem_bytes.back() * 100.0 / totalMem;
 			string mem_str = fmt::format("{:.2f}", mem_p);
@@ -2073,9 +2111,9 @@ namespace Proc {
 			out += Fx::reset;
 
 			//? Set correct gradient colors if enabled
-			string c_color, m_color, t_color, g_color, end;
+			string c_color, m_color, t_color, g_color, rx_color, tx_color, end;
 			if (is_selected or is_followed) {
-				c_color = m_color = t_color = g_color = Fx::b;
+				c_color = m_color = t_color = g_color = rx_color = tx_color = Fx::b;
 				end = Fx::ub;
 				const string highlight = is_followed ? Theme::c("followed_bg") + Theme::c("followed_fg") : Theme::c("selected_bg") + Theme::c("selected_fg");
 				fmt::format_to(std::back_inserter(out), "{}{}", highlight, Fx::b);
@@ -2084,8 +2122,9 @@ namespace Proc {
 				int calc = (selected > lc) ? selected - lc : lc - selected;
 				if (proc_colors) {
 					end = Theme::c("main_fg") + Fx::ub;
-					array<string, 3> colors;
-					for (int i = 0; int v : {(int)round(p.cpu_p), (int)round(p.mem * 100 / totalMem), (int)p.threads / 3}) {
+					array<string, 5> colors;
+					const uint64_t rx_rate = (net_cols == 1 ? p.net_rx + p.net_tx : p.net_rx);
+					for (int i = 0; int v : {(int)round(p.cpu_p), (int)round(p.mem * 100 / totalMem), (int)p.threads / 3, net_level(rx_rate), net_level(p.net_tx)}) {
 						if (proc_gradient) {
 							int val = (min(v, 100) + 100) - calc * 100 / select_max;
 							if (val < 100) colors[i++] = Theme::g("proc_color").at(max(0, val));
@@ -2095,9 +2134,10 @@ namespace Proc {
 							colors[i++] = Theme::g("process").at(clamp(v, 0, 100));
 					}
 					c_color = colors.at(0); m_color = colors.at(1); t_color = colors.at(2);
+					rx_color = colors.at(3); tx_color = colors.at(4);
 				}
 				else {
-					c_color = m_color = t_color = Fx::b;
+					c_color = m_color = t_color = rx_color = tx_color = Fx::b;
 					end = Fx::ub;
 				}
 				if (proc_gradient) {
@@ -2162,8 +2202,21 @@ namespace Proc {
 				}
 			}();
 
+			//? Network rate cells, idle shown as a dimmed 0
+			string net_str;
+			if (net_cols > 0) {
+				const auto net_cell = [&](const uint64_t rate, const string& color) -> string {
+					if (rate == 0 and not (is_selected or is_followed))
+						return Theme::c("inactive_fg") + rjust("0", 5) + ' ' + (g_color.empty() ? Theme::c("main_fg") : g_color);
+					return color + rjust(floating_humanizer(rate, true), 5) + end + ' ';
+				};
+				if (net_cols == 2) net_str = net_cell(p.net_rx, rx_color) + net_cell(p.net_tx, tx_color);
+				else net_str = net_cell(p.net_rx + p.net_tx, rx_color);
+			}
+
 			out += (thread_size > 0 ? t_color + rjust(proc_threads_string, thread_size) + ' ' + end : "" )
 				+ g_color + ljust((cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + ' '
+				+ net_str
 				+ m_color + rjust(mem_str, 5) + end + ' '
 				+ (is_selected or is_followed ? "" : Theme::c("inactive_fg")) + (show_graphs ? graph_bg * 5: "")
 				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs.at(p.pid)({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : (long long)round(p.cpu_p))}, data_same) : "") + end + ' '

@@ -101,6 +101,8 @@ bool set_priority(pid_t pid, int priority) {
   return false;
 }
 
+	static uint64_t net_total(const proc_info& p) { return p.net_rx + p.net_tx; }
+
 	void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, bool reverse, bool tree) {
 		if (reverse) {
 			switch (v_index(sort_vector, sorting)) {
@@ -112,6 +114,7 @@ bool set_priority(pid_t pid, int priority) {
 			case 5: rng::stable_sort(proc_vec, rng::less{}, &proc_info::mem); 		break;
 			case 6: rng::stable_sort(proc_vec, rng::less{}, &proc_info::cpu_p);		break;
 			case 7: rng::stable_sort(proc_vec, rng::less{}, &proc_info::cpu_c);		break;
+			case 8: rng::stable_sort(proc_vec, rng::less{}, net_total);				break;
 			}
 		}
 		else {
@@ -124,6 +127,7 @@ bool set_priority(pid_t pid, int priority) {
 			case 5: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::mem); 		break;
 			case 6: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::cpu_p);   	break;
 			case 7: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::cpu_c);   	break;
+			case 8: rng::stable_sort(proc_vec, rng::greater{}, net_total);			break;
 			}
 		}
 
@@ -153,6 +157,7 @@ bool set_priority(pid_t pid, int priority) {
 				case 5: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().mem < b.entry.get().mem; });	break;
 				case 6: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().cpu_p < b.entry.get().cpu_p; });	break;
 				case 7: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().cpu_c < b.entry.get().cpu_c; });	break;
+				case 8: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return net_total(a.entry.get()) < net_total(b.entry.get()); });	break;
 				}
 			}
 			else {
@@ -161,6 +166,7 @@ bool set_priority(pid_t pid, int priority) {
 				case 5: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().mem > b.entry.get().mem; });	break;
 				case 6: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().cpu_p > b.entry.get().cpu_p; });	break;
 				case 7: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().cpu_c > b.entry.get().cpu_c; });	break;
+				case 8: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return net_total(a.entry.get()) > net_total(b.entry.get()); });	break;
 				}
 			}
 		}
@@ -245,6 +251,8 @@ bool set_priority(pid_t pid, int priority) {
 					cur_proc.cpu_c += p.cpu_c;
 					cur_proc.mem += p.mem;
 					cur_proc.threads += p.threads;
+					cur_proc.net_rx += p.net_rx;
+					cur_proc.net_tx += p.net_tx;
 				}
 				filter_found++;
 				p.filtered = true;
@@ -254,6 +262,8 @@ bool set_priority(pid_t pid, int priority) {
 				cur_proc.cpu_c += p.cpu_c;
 				cur_proc.mem += p.mem;
 				cur_proc.threads += p.threads;
+				cur_proc.net_rx += p.net_rx;
+				cur_proc.net_tx += p.net_tx;
 			}
 		}
 	}
@@ -343,7 +353,11 @@ const vector<string> Proc::sort_vector = {
 	"memory",
 	"cpu direct",
 	"cpu lazy",
+	"network",
 };
+
+atomic<bool> Proc::NetIO::active{false};
+string Proc::NetIO::status{"not started"};
 
 const std::unordered_map<char, string> Proc::proc_states = {
 	{'R', "Running"},

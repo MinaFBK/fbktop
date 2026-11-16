@@ -396,6 +396,10 @@ namespace Proc {
 		uint64_t cpu_s{};
 		uint64_t cpu_t{};
 		uint64_t death_time{};
+		uint64_t net_rx{};      // network bytes received per second
+		uint64_t net_tx{};      // network bytes sent per second
+		uint64_t net_rx_t{};    // network bytes received since btop started counting
+		uint64_t net_tx_t{};    // network bytes sent since btop started counting
 		string prefix{};        // defaults to ""
 		size_t depth{};
 		size_t tree_index{};
@@ -416,6 +420,30 @@ namespace Proc {
 
 	//? Contains all info for proc detailed box
 	extern detail_container detailed;
+
+	//* Per-process network counters (Linux, eBPF)
+	namespace NetIO {
+		struct counters {
+			uint64_t rx{};
+			uint64_t tx{};
+			bool seen{};
+		};
+
+		//? True once the eBPF counters are loaded and attached
+		extern atomic<bool> active;
+
+		//? Why the counters are not active, or "active"
+		extern string status;
+
+		//* Load and attach the eBPF counters, returns false (and sets status) on failure
+		bool init();
+
+		//* Fill <out> with cumulative rx/tx bytes for every pid seen sending or receiving
+		bool read(std::unordered_map<size_t, counters>& out);
+
+		//* Drop counters for pids that no longer exist
+		void forget(const vector<size_t>& pids);
+	}
 
 	//* Collect and sort process information from /proc
 	auto collect(bool no_update = false) -> vector<proc_info>&;
