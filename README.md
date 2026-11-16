@@ -28,6 +28,8 @@ GPU usage comes from the kernel's DRM fdinfo files (`/proc/<pid>/fdinfo/<fd>`), 
 - **libbpf** development files to build (`libbpf-dev` on Debian/Ubuntu, `libbpf-devel` on Fedora, `libbpf` on Arch). Without them it still builds, just without the network columns.
 - **Permission to load eBPF**: run as root, or give the binary its permissions once with `sudo make setcap` (`CAP_BPF` for the network counters, `CAP_PERFMON` for Intel GPU stats, `CAP_DAC_READ_SEARCH` for the root-only CPU power counter, as in btop).
 
+On a PC shared by several user accounts, note that anyone who runs fbktop sees the network rates of every program, including other users' programs (Linux normally keeps per-process I/O counts private to their owner). The Gpu% column only covers your own programs.
+
 If any of these is missing, fbktop runs like normal btop with the network columns hidden; the reason is written to `~/.local/state/fbktop.log`. The Gpu% column needs no extra permission or library; it appears once a GPU driver that reports engine usage is found: amdgpu, i915, xe, msm, panfrost, v3d, and panthor with its profiling switch on. nouveau and NVIDIA's proprietary driver don't report it. On PCs with two GPUs each GPU's engines are kept apart, so a process shows its busier GPU.
 
 ## Install
