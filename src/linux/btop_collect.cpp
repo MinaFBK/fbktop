@@ -3350,6 +3350,8 @@ namespace Proc {
 					if (not pread.good()) continue;
 					getline(pread, new_proc.name);
 					pread.close();
+					//? Any process can set its own name, so strip control characters that would inject terminal escape codes
+					new_proc.name = replace_ascii_control(new_proc.name);
 					//? Check for whitespace characters in name and set offset to get correct fields from stat file
 					new_proc.name_offset = rng::count(new_proc.name, ' ');
 
