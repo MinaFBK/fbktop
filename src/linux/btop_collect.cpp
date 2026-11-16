@@ -3295,6 +3295,10 @@ namespace Proc {
 			net_last = net_now;
 			if (not net_ok) net_primed = false;
 
+			//? Per-process GPU usage (DRM fdinfo)
+			const bool show_gpu = Config::getB("proc_gpu");
+			if (show_gpu) GpuUse::begin();
+
 			//? Get cpu total times from /proc/stat up to the guest field
 			cputimes = 0;
 			pread.open(Shared::procPath / "stat");
@@ -3483,6 +3487,9 @@ namespace Proc {
 				//? Process cumulative cpu usage since process start
 				new_proc.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clkTck) - new_proc.cpu_s);
 
+				//? Process GPU usage since last update, cpu activity decides when its open fds are re-scanned for GPU clients
+				new_proc.gpu_p = show_gpu ? GpuUse::sample(pid, no_cache, cpu_t != new_proc.cpu_t) : 0.0;
+
 				//? Update cached value with latest cpu times
 				new_proc.cpu_t = cpu_t;
 
@@ -3511,6 +3518,8 @@ namespace Proc {
 					got_detailed = true;
 				}
 			}
+
+			if (show_gpu) GpuUse::end();
 
 			//? Drop network counters of pids that are gone or not tracked
 			if (net_ok) {
@@ -3541,6 +3550,7 @@ namespace Proc {
 							r.cpu_p = 0.0;
 							r.mem = 0;
 							r.net_rx = r.net_tx = 0;
+							r.gpu_p = 0.0;
 						}
 					}
 				}

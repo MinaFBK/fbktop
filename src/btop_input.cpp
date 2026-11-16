@@ -381,6 +381,19 @@ namespace Input {
 					Config::flip("proc_reversed");
 					Config::set("update_following", true);
 				}
+				//? Click on a column label: sort by it like left/right do (normal direction), a second click on the sorted column reverses
+				else if (key.starts_with("sort_")) {
+					const auto& current = Config::getS("proc_sorting");
+					string sorting{key.substr(5)};
+					if (sorting == "cpu") sorting = (current.starts_with("cpu") ? current : "cpu lazy");
+					if (sorting == current) Config::flip("proc_reversed");
+					else if (v_contains(Proc::sort_vector, sorting)) {
+						Config::set("proc_sorting", sorting);
+						Config::set("proc_reversed", false);
+					}
+					Config::set("update_following", true);
+					if (Config::getB("proc_tree")) no_update = false;
+				}
 				else if (key == "c")
 					Config::flip("proc_per_core");
 

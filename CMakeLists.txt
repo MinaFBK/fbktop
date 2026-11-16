@@ -75,7 +75,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
   target_sources(libbtop PRIVATE src/netbsd/btop_collect.cpp)
 elseif(LINUX)
-  target_sources(libbtop PRIVATE src/linux/btop_collect.cpp src/linux/btop_netio.cpp)
+  target_sources(libbtop PRIVATE src/linux/btop_collect.cpp src/linux/btop_gpuproc.cpp src/linux/btop_netio.cpp)
   # Per-process network usage through eBPF, enabled when libbpf is found
   find_package(PkgConfig QUIET)
   if(PkgConfig_FOUND)

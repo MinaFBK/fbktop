@@ -823,13 +823,14 @@ namespace Menu {
 				"Possible values:",
 				"\"pid\", \"program\", \"arguments\", \"threads\",",
 				"\"user\", \"memory\", \"cpu lazy\",",
-				"\"cpu direct\" and \"network\".",
+				"\"cpu direct\", \"network\" and \"gpu\".",
 				"",
 				"\"cpu lazy\" updates top process over time.",
 				"\"cpu direct\" updates top process",
 				"directly.",
 				"",
 				"\"network\" sorts by download + upload.",
+				"\"gpu\" sorts by GPU usage.",
 				"",
 				"This is the sort fbktop starts with.",
 				"Sorting with the arrow keys only",
@@ -837,7 +838,10 @@ namespace Menu {
 			{"proc_reversed",
 				"Reverse processes sorting order.",
 				"",
-				"True or False."},
+				"True or False.",
+				"",
+				"Reversing with the r key or a column",
+				"click only lasts until fbktop exits."},
 			{"proc_tree",
 				"Processes tree view.",
 				"",
@@ -900,6 +904,20 @@ namespace Menu {
 				"",
 				"Loopback (localhost) traffic is not",
 				"counted."},
+			{"proc_gpu",
+				"(Linux) Show GPU usage per process.",
+				"",
+				"Adds a Gpu% column: the busiest GPU",
+				"engine (3D, compute, video...) used",
+				"by the process since the last update.",
+				"",
+				"Read from DRM fdinfo, works with",
+				"amdgpu, i915 and other drivers that",
+				"report engine usage.",
+				"",
+				"Processes of other users (e.g. a",
+				"root Xorg) show 0 unless fbktop runs",
+				"as root."},
 			{"keep_dead_proc_usage",
 				"Cpu and Mem usage for dead processes",
 				"",
@@ -1515,6 +1533,8 @@ static int optionsMenu(const string& key) {
 			}
 			else if (selPred.test(isBool)) {
 				Config::flip(option);
+				if (option == "proc_reversed")
+					Config::startup_reversed = Config::boolsTmp.contains(option) ? Config::boolsTmp.at(option) : Config::getB(option);
 				screen_redraw = true;
 
 				// Special handling for options that need additional action.

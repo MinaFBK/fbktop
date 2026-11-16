@@ -2,19 +2,24 @@
 
 # fbktop
 
-**fbktop** is a fork of [btop](https://github.com/aristocratos/btop) (v1.4.8) that adds **network usage per process**: how fast each program is downloading and uploading, right in the process list. Everything else is btop.
+**fbktop** is a fork of [btop](https://github.com/aristocratos/btop) (v1.4.8) that adds **network and GPU usage per process**: how fast each program is downloading and uploading and how busy it keeps the GPU, right in the process list. Everything else is btop.
 
 ## What's added
 
 - **Down / Up columns** in the process list (one combined **Net** column when the box is narrower than 90 columns). Idle programs show a dimmed `0`.
-- **`network` sort option**: cycle with `←` / `→`. Programs using the network move to the top.
+- **Gpu% column**: how busy each program keeps the GPU, as the busiest GPU engine (3D, compute, video) since the last update, like the GPU column in Windows Task Manager. Shown when the box is at least 70 columns wide.
+- **`network` and `gpu` sort options**: cycle with `←` / `→`.
+- **Clickable column headers**: click a column name (Pid, Program, Command, Threads, User, Down/Up, Gpu%, Mem, Cpu%) to sort by it; click it again to reverse.
+- **Startup sort stays put**: the sort and reverse set in the config file or options menu are what fbktop starts with. Changing them with the keys or the mouse only lasts until you quit.
 - **Info box line** (select a process, press `Enter`): download and upload rate plus totals since fbktop started.
-- **`proc_net` option** in the options menu (on by default).
+- **`proc_net` and `proc_gpu` options** in the options menu (both on by default).
 - Two fixes backported from btop after v1.4.8: no more logo drawn over the list when only the process box is shown (upstream `00cbab2`), and shorter number formatting (upstream `116d129`).
 
 ## How it works
 
 fbktop loads a small eBPF program (code that runs inside the kernel) on the kernel's `sock:sock_send_length` and `sock:sock_recv_length` tracepoints. These fire every time a program sends or receives on a socket, with the number of bytes moved, so TCP and UDP (including browser QUIC traffic and games) are counted. Localhost traffic is skipped so the columns add up to what your network card carries. The counters live only while fbktop runs.
+
+GPU usage comes from the kernel's DRM fdinfo files (`/proc/<pid>/fdinfo/<fd>`), where amdgpu, i915 and other drivers report how long each program's GPU work ran on each engine. Finding a program's GPU handles means looking at every file it has open, so fbktop does that once when a program appears and afterwards only re-checks programs that used CPU time recently (a program can't send work to the GPU without running). Each update then reads one small file per GPU client. Programs of other users (for example a root Xorg) show 0 unless fbktop runs as root.
 
 ## Requirements
 
@@ -22,7 +27,7 @@ fbktop loads a small eBPF program (code that runs inside the kernel) on the kern
 - **libbpf** development files to build (`libbpf-dev` on Debian/Ubuntu, `libbpf-devel` on Fedora, `libbpf` on Arch). Without them it still builds, just without the network columns.
 - **Permission to load eBPF**: run as root, or give the binary `CAP_BPF` and `CAP_PERFMON` once with `sudo make setcap`.
 
-If any of these is missing, fbktop runs like normal btop with the network columns hidden; the reason is written to `~/.local/state/fbktop.log`.
+If any of these is missing, fbktop runs like normal btop with the network columns hidden; the reason is written to `~/.local/state/fbktop.log`. The Gpu% column needs no extra permission or library; it appears once a GPU driver that reports engine usage is found (NVIDIA's proprietary driver does not).
 
 ## Install
 
@@ -53,4 +58,4 @@ Uninstall: `sudo make uninstall`.
 
 Based on [btop](https://github.com/aristocratos/btop) by Jakob P. Liljenberg (aristocratos), licensed under the Apache License 2.0 (see `LICENSE`). Internal file and namespace names are kept from btop so upstream fixes can still be merged.
 
-Files changed from btop v1.4.8: `Makefile`, `CMakeLists.txt`, `README.md`, `manpage.md`, `ansi_banner.utf8`, `fbktop.desktop` (was `btop.desktop`), `Img/icon.*`, `Img/logo.*`, `Img/gen_logo.py` (new), `src/btop.cpp`, `src/btop_cli.cpp`, `src/btop_config.cpp`, `src/btop_draw.cpp`, `src/btop_input.cpp`, `src/btop_log.cpp`, `src/btop_menu.cpp`, `src/btop_shared.cpp`, `src/btop_shared.hpp`, `src/btop_tools.cpp`, `src/btop_tools.hpp`, `src/linux/btop_collect.cpp`, `src/linux/btop_netio.cpp` (new), `src/linux/netio/` (new), `tests/tools.cpp`. Removed: btop's GitHub workflows and funding file.
+Files changed from btop v1.4.8: `Makefile`, `CMakeLists.txt`, `README.md`, `manpage.md`, `ansi_banner.utf8`, `fbktop.desktop` (was `btop.desktop`), `Img/icon.*`, `Img/logo.*`, `Img/gen_logo.py` (new), `src/btop.cpp`, `src/btop_cli.cpp`, `src/btop_config.cpp`, `src/btop_config.hpp`, `src/btop_draw.cpp`, `src/btop_input.cpp`, `src/btop_log.cpp`, `src/btop_menu.cpp`, `src/btop_shared.cpp`, `src/btop_shared.hpp`, `src/btop_tools.cpp`, `src/btop_tools.hpp`, `src/linux/btop_collect.cpp`, `src/linux/btop_gpuproc.cpp` (new), `src/linux/btop_netio.cpp` (new), `src/linux/netio/` (new), `tests/tools.cpp`. Removed: btop's GitHub workflows and funding file.

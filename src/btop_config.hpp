@@ -61,9 +61,10 @@ namespace Config {
 
 	extern bool write_new;
 
-	//* proc_sorting value written to the config file: the sort fbktop starts with.
-	//* Set from the config file and the options menu; arrow-key sort changes only last for the session.
+	//* proc_sorting and proc_reversed values written to the config file: the sort fbktop starts with.
+	//* Set from the config file and the options menu; changes from keys and mouse only last for the session.
 	extern string startup_sorting;
+	extern bool startup_reversed;
 
 	constexpr int ONE_DAY_MILLIS = 1000 * 60 * 60 * 24;
 

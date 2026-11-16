@@ -400,6 +400,7 @@ namespace Proc {
 		uint64_t net_tx{};      // network bytes sent per second
 		uint64_t net_rx_t{};    // network bytes received since btop started counting
 		uint64_t net_tx_t{};    // network bytes sent since btop started counting
+		double gpu_p{};         // GPU busy percent of the busiest engine since last update
 		string prefix{};        // defaults to ""
 		size_t depth{};
 		size_t tree_index{};
@@ -443,6 +444,22 @@ namespace Proc {
 
 		//* Drop counters for pids that no longer exist
 		void forget(const vector<size_t>& pids);
+	}
+
+	//* Per-process GPU usage from DRM fdinfo (Linux)
+	namespace GpuUse {
+		//? True once a process with DRM engine usage stats has been found
+		extern atomic<bool> active;
+
+		//* Start a collection cycle
+		void begin();
+
+		//* GPU busy percent of <pid>'s busiest engine since its last sample.
+		//* <is_new>: pid just appeared, <cpu_active>: pid used cpu time since the last update
+		double sample(size_t pid, bool is_new, bool cpu_active);
+
+		//* End a collection cycle and forget pids that were not sampled
+		void end();
 	}
 
 	//* Collect and sort process information from /proc

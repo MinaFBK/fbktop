@@ -72,6 +72,7 @@ namespace Config {
 	atomic<bool> writelock (false);
 	bool write_new;
 	string startup_sorting;
+	bool startup_reversed{};
 
 	const vector<array<string, 2>> descriptions = {
 		{"color_theme", 		"#* Name of a btop++/bpytop/bashtop formatted \".theme\" file, \"Default\" and \"TTY\" for builtin themes.\n"
@@ -123,11 +124,11 @@ namespace Config {
 
 		{"update_ms", 			"#* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs."},
 
-		{"proc_sorting",		"#* Processes sorting, \"pid\" \"program\" \"arguments\" \"threads\" \"user\" \"memory\" \"cpu lazy\" \"cpu direct\" \"network\",\n"
+		{"proc_sorting",		"#* Processes sorting, \"pid\" \"program\" \"arguments\" \"threads\" \"user\" \"memory\" \"cpu lazy\" \"cpu direct\" \"network\" \"gpu\",\n"
 								"#* \"cpu lazy\" sorts top process over time (easier to follow), \"cpu direct\" updates top process directly.\n"
 								"#* This is the sort fbktop starts with; changing the sort with the arrow keys only lasts until exit."},
 
-		{"proc_reversed",		"#* Reverse sorting order, True or False."},
+		{"proc_reversed",		"#* Reverse sorting order, True or False. Reversing with the r key or a column click only lasts until exit."},
 
 		{"proc_tree",			"#* Show processes as a tree."},
 
@@ -141,6 +142,8 @@ namespace Config {
 
 		{"proc_net", 			"#* (Linux) Show per-process network download/upload rates. Uses eBPF, needs Linux 6.3+ and\n"
 								"#* running fbktop as root or with CAP_BPF and CAP_PERFMON (make setcap)."},
+		{"proc_gpu", 			"#* (Linux) Show per-process GPU usage (busiest GPU engine) from DRM fdinfo. Works with amdgpu, i915 and\n"
+							"#* other drivers that report drm-engine usage. Processes of other users show 0 unless fbktop runs as root."},
 
 		{"proc_cpu_graphs",     "#* Show cpu graph for each process."},
 
@@ -330,6 +333,7 @@ namespace Config {
 		{"proc_per_core", false},
 		{"proc_mem_bytes", true},
 		{"proc_net", true},
+		{"proc_gpu", true},
 		{"proc_cpu_graphs", true},
 		{"proc_info_smaps", false},
 		{"proc_left", false},
@@ -770,6 +774,7 @@ namespace Config {
 	void load(const fs::path& conf_file, vector<string>& load_warnings) {
 		std::error_code error;
 		startup_sorting = strings.at("proc_sorting");
+		startup_reversed = bools.at("proc_reversed");
 		if (conf_file.empty())
 			return;
 		else if (not fs::exists(conf_file, error)) {
@@ -838,6 +843,7 @@ namespace Config {
 
 			if (not load_warnings.empty()) write_new = true;
 			startup_sorting = strings.at("proc_sorting");
+			startup_reversed = bools.at("proc_reversed");
 		}
 	}
 
@@ -897,6 +903,8 @@ namespace Config {
 			// Lookup default value by name and write it out.
 			if (name == "proc_sorting" and not startup_sorting.empty()) {
 				fmt::format_to(std::back_inserter(buffer), R"("{}")", startup_sorting);
+			} else if (name == "proc_reversed" and not startup_sorting.empty()) {
+				fmt::format_to(std::back_inserter(buffer), "{}", startup_reversed ? "true" : "false");
 			} else if (strings.contains(name)) {
 				fmt::format_to(std::back_inserter(buffer), R"("{}")", strings[name]);
 			} else if (ints.contains(name)) {

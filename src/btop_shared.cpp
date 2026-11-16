@@ -115,6 +115,7 @@ bool set_priority(pid_t pid, int priority) {
 			case 6: rng::stable_sort(proc_vec, rng::less{}, &proc_info::cpu_p);		break;
 			case 7: rng::stable_sort(proc_vec, rng::less{}, &proc_info::cpu_c);		break;
 			case 8: rng::stable_sort(proc_vec, rng::less{}, net_total);				break;
+			case 9: rng::stable_sort(proc_vec, rng::less{}, &proc_info::gpu_p);		break;
 			}
 		}
 		else {
@@ -128,6 +129,7 @@ bool set_priority(pid_t pid, int priority) {
 			case 6: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::cpu_p);   	break;
 			case 7: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::cpu_c);   	break;
 			case 8: rng::stable_sort(proc_vec, rng::greater{}, net_total);			break;
+			case 9: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::gpu_p);		break;
 			}
 		}
 
@@ -158,6 +160,7 @@ bool set_priority(pid_t pid, int priority) {
 				case 6: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().cpu_p < b.entry.get().cpu_p; });	break;
 				case 7: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().cpu_c < b.entry.get().cpu_c; });	break;
 				case 8: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return net_total(a.entry.get()) < net_total(b.entry.get()); });	break;
+				case 9: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().gpu_p < b.entry.get().gpu_p; });	break;
 				}
 			}
 			else {
@@ -167,6 +170,7 @@ bool set_priority(pid_t pid, int priority) {
 				case 6: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().cpu_p > b.entry.get().cpu_p; });	break;
 				case 7: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().cpu_c > b.entry.get().cpu_c; });	break;
 				case 8: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return net_total(a.entry.get()) > net_total(b.entry.get()); });	break;
+				case 9: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().gpu_p > b.entry.get().gpu_p; });	break;
 				}
 			}
 		}
@@ -253,6 +257,7 @@ bool set_priority(pid_t pid, int priority) {
 					cur_proc.threads += p.threads;
 					cur_proc.net_rx += p.net_rx;
 					cur_proc.net_tx += p.net_tx;
+					cur_proc.gpu_p += p.gpu_p;
 				}
 				filter_found++;
 				p.filtered = true;
@@ -264,6 +269,7 @@ bool set_priority(pid_t pid, int priority) {
 				cur_proc.threads += p.threads;
 				cur_proc.net_rx += p.net_rx;
 				cur_proc.net_tx += p.net_tx;
+				cur_proc.gpu_p += p.gpu_p;
 			}
 		}
 	}
@@ -354,9 +360,11 @@ const vector<string> Proc::sort_vector = {
 	"cpu direct",
 	"cpu lazy",
 	"network",
+	"gpu",
 };
 
 atomic<bool> Proc::NetIO::active{false};
+atomic<bool> Proc::GpuUse::active{false};
 string Proc::NetIO::status{"not started"};
 
 const std::unordered_map<char, string> Proc::proc_states = {

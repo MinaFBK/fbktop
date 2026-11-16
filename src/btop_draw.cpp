@@ -1617,8 +1617,9 @@ namespace Proc {
 	Draw::TextEdit filter;
 	Draw::Graph detailed_cpu_graph;
 	Draw::Graph detailed_mem_graph;
-	int user_size, thread_size, prog_size, cmd_size, tree_size, net_cols;
+	int user_size, thread_size, prog_size, cmd_size, tree_size, net_cols, gpu_cols;
 	bool net_shown = false;
+	bool gpu_shown = false;
 	int dgraph_x, dgraph_width, d_width, d_x, d_y;
 	bool previous_proc_banner_state = false;
 	atomic<bool> resized (false);
@@ -1724,6 +1725,7 @@ namespace Proc {
 		auto vim_keys = Config::getB("vim_keys");
 		auto show_graphs = Config::getB("proc_cpu_graphs");
 		const bool show_net = Config::getB("proc_net") and NetIO::active;
+		const bool show_gpu = Config::getB("proc_gpu") and GpuUse::active;
 		const auto pause_proc_list = Config::getB("pause_proc_list");
 		auto follow_process = Config::getB("follow_process");
 		int followed_pid = Config::getI("followed_pid");
@@ -1743,6 +1745,10 @@ namespace Proc {
 		//? Network columns appear once the eBPF counters are attached, which can happen after the first draw
 		if (show_net != net_shown) {
 			net_shown = show_net;
+			redraw = true;
+		}
+		if (show_gpu != gpu_shown) {
+			gpu_shown = show_gpu;
 			redraw = true;
 		}
 		string out;
@@ -1830,6 +1836,10 @@ namespace Proc {
 			net_cols = (not show_net ? 0 : (width >= 90 ? 2 : (width > 55 ? 1 : 0)));
 			cmd_size -= net_cols * 6;
 			tree_size -= net_cols * 6;
+			//? GPU: one column when there is room
+			gpu_cols = (show_gpu and width >= 70 ? 1 : 0);
+			cmd_size -= gpu_cols * 6;
+			tree_size -= gpu_cols * 6;
 
 			//? Detailed box
 			if (show_detailed) {
@@ -1996,21 +2006,48 @@ namespace Proc {
 			    if (selected > 0) Input::mouse_mappings["F"] = {y + height - 1, mouse_x, 1, 6};
 			}
 
-			//? Labels for fields in list
-			if (not proc_tree)
-				out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b
-					+ rjust("Pid:", 8) + ' '
-					+ ljust("Program:", prog_size) + ' '
-					+ (cmd_size > 0 ? ljust("Command:", cmd_size) : "") + ' ';
-			else
-				out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b
-					+ ljust("Tree:", tree_size) + ' ';
-
-			out += (thread_size > 0 ? Mv::l(4) + "Threads: " : "")
-					+ ljust("User:", user_size) + ' '
-					+ (net_cols == 2 ? rjust("Down", 5) + ' ' + rjust("Up", 5) + ' ' : (net_cols == 1 ? rjust("Net", 5) + ' ' : ""))
-					+ rjust((mem_bytes ? "MemB" : "Mem%"), 5) + ' '
-					+ rjust("Cpu%", (show_graphs ? 10 : 5)) + Fx::ub;
+			//? Labels for fields in list, clicking a label sorts by it (key "sort_<sorting>", see Input::process)
+			for (const auto& key : {"sort_pid", "sort_name", "sort_command", "sort_threads", "sort_user", "sort_network", "sort_gpu", "sort_memory", "sort_cpu"})
+				Input::mouse_mappings.erase(key);
+			const int hy = y + 1;
+			int hx = x + 1;
+			out += Mv::to(hy, hx) + Theme::c("title") + Fx::b;
+			if (not proc_tree) {
+				out += rjust("Pid:", 8) + ' ' + ljust("Program:", prog_size) + ' ' + (cmd_size > 0 ? ljust("Command:", cmd_size) : "") + ' ';
+				Input::mouse_mappings["sort_pid"] = {hy, hx, 1, 8};
+				Input::mouse_mappings["sort_name"] = {hy, hx + 9, 1, prog_size};
+				//? "Threads:" is drawn 4 columns to the left, over the end of the command field
+				const int cmd_click = cmd_size - (thread_size > 0 ? 3 : 0);
+				if (cmd_click > 0) Input::mouse_mappings["sort_command"] = {hy, hx + 10 + prog_size, 1, cmd_click};
+				hx += 11 + prog_size + max(0, cmd_size);
+			}
+			else {
+				out += ljust("Tree:", tree_size) + ' ';
+				hx += tree_size + 1;
+			}
+			if (thread_size > 0) {
+				out += Mv::l(4) + "Threads: ";
+				Input::mouse_mappings["sort_threads"] = {hy, hx - 4, 1, 8};
+				hx += 5;
+			}
+			out += ljust("User:", user_size) + ' ';
+			Input::mouse_mappings["sort_user"] = {hy, hx, 1, user_size};
+			hx += user_size + 1;
+			if (net_cols > 0) {
+				out += (net_cols == 2 ? rjust("Down", 5) + ' ' + rjust("Up", 5) + ' ' : rjust("Net", 5) + ' ');
+				Input::mouse_mappings["sort_network"] = {hy, hx, 1, net_cols * 6 - 1};
+				hx += net_cols * 6;
+			}
+			if (gpu_cols > 0) {
+				out += rjust("Gpu%", 5) + ' ';
+				Input::mouse_mappings["sort_gpu"] = {hy, hx, 1, 5};
+				hx += 6;
+			}
+			out += rjust((mem_bytes ? "MemB" : "Mem%"), 5) + ' ';
+			Input::mouse_mappings["sort_memory"] = {hy, hx, 1, 5};
+			hx += 6;
+			out += rjust("Cpu%", (show_graphs ? 10 : 5)) + Fx::ub;
+			Input::mouse_mappings["sort_cpu"] = {hy, hx, 1, (show_graphs ? 10 : 5)};
 		}
 		//* End of redraw block
 
@@ -2111,9 +2148,9 @@ namespace Proc {
 			out += Fx::reset;
 
 			//? Set correct gradient colors if enabled
-			string c_color, m_color, t_color, g_color, rx_color, tx_color, end;
+			string c_color, m_color, t_color, g_color, rx_color, tx_color, gpu_color, end;
 			if (is_selected or is_followed) {
-				c_color = m_color = t_color = g_color = rx_color = tx_color = Fx::b;
+				c_color = m_color = t_color = g_color = rx_color = tx_color = gpu_color = Fx::b;
 				end = Fx::ub;
 				const string highlight = is_followed ? Theme::c("followed_bg") + Theme::c("followed_fg") : Theme::c("selected_bg") + Theme::c("selected_fg");
 				fmt::format_to(std::back_inserter(out), "{}{}", highlight, Fx::b);
@@ -2122,9 +2159,9 @@ namespace Proc {
 				int calc = (selected > lc) ? selected - lc : lc - selected;
 				if (proc_colors) {
 					end = Theme::c("main_fg") + Fx::ub;
-					array<string, 5> colors;
+					array<string, 6> colors;
 					const uint64_t rx_rate = (net_cols == 1 ? p.net_rx + p.net_tx : p.net_rx);
-					for (int i = 0; int v : {(int)round(p.cpu_p), (int)round(p.mem * 100 / totalMem), (int)p.threads / 3, net_level(rx_rate), net_level(p.net_tx)}) {
+					for (int i = 0; int v : {(int)round(p.cpu_p), (int)round(p.mem * 100 / totalMem), (int)p.threads / 3, net_level(rx_rate), net_level(p.net_tx), (int)round(p.gpu_p)}) {
 						if (proc_gradient) {
 							int val = (min(v, 100) + 100) - calc * 100 / select_max;
 							if (val < 100) colors[i++] = Theme::g("proc_color").at(max(0, val));
@@ -2134,10 +2171,10 @@ namespace Proc {
 							colors[i++] = Theme::g("process").at(clamp(v, 0, 100));
 					}
 					c_color = colors.at(0); m_color = colors.at(1); t_color = colors.at(2);
-					rx_color = colors.at(3); tx_color = colors.at(4);
+					rx_color = colors.at(3); tx_color = colors.at(4); gpu_color = colors.at(5);
 				}
 				else {
-					c_color = m_color = t_color = rx_color = tx_color = Fx::b;
+					c_color = m_color = t_color = rx_color = tx_color = gpu_color = Fx::b;
 					end = Fx::ub;
 				}
 				if (proc_gradient) {
@@ -2214,9 +2251,19 @@ namespace Proc {
 				else net_str = net_cell(p.net_rx + p.net_tx, rx_color);
 			}
 
+			//? GPU usage cell, idle shown as a dimmed 0
+			string gpu_str;
+			if (gpu_cols > 0) {
+				if (p.gpu_p < 0.05)
+					gpu_str = (is_selected or is_followed ? "" : Theme::c("inactive_fg")) + rjust("0", 5) + ' ' + (is_selected or is_followed ? "" : (g_color.empty() ? Theme::c("main_fg") : g_color));
+				else
+					gpu_str = gpu_color + rjust(fmt::format("{:.{}f}", p.gpu_p, p.gpu_p < 9.95 ? 1 : 0), 5) + end + ' ';
+			}
+
 			out += (thread_size > 0 ? t_color + rjust(proc_threads_string, thread_size) + ' ' + end : "" )
 				+ g_color + ljust((cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + ' '
 				+ net_str
+				+ gpu_str
 				+ m_color + rjust(mem_str, 5) + end + ' '
 				+ (is_selected or is_followed ? "" : Theme::c("inactive_fg")) + (show_graphs ? graph_bg * 5: "")
 				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs.at(p.pid)({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : (long long)round(p.cpu_p))}, data_same) : "") + end + ' '
